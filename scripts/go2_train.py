@@ -3,8 +3,7 @@ import os
 import pickle
 import shutil
 
-from extensions.env.go2_env import Go2Env
-from rsl_rl.utils. import Go2EnvConfig
+from rl_lab.env.go2_env import Go2Env
 from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
@@ -14,6 +13,7 @@ def get_train_cfg(exp_name, max_iterations):
 
     train_cfg_dict = {
         "algorithm": {
+            "class_name": "PPO",
             "clip_param": 0.2,
             "desired_kl": 0.01,
             "entropy_coef": 0.01,
@@ -29,28 +29,25 @@ def get_train_cfg(exp_name, max_iterations):
         },
         "init_member_classes": {},
         "policy": {
+            "class_name": "ActorCritic",
             "activation": "elu",
             "actor_hidden_dims": [512, 256, 128],
             "critic_hidden_dims": [512, 256, 128],
             "init_noise_std": 1.0,
         },
-        "runner": {
-            "algorithm_class_name": "PPO",
-            "checkpoint": -1,
-            "experiment_name": exp_name,
-            "load_run": -1,
-            "log_interval": 1,
-            "max_iterations": max_iterations,
-            "num_steps_per_env": 24,
-            "policy_class_name": "ActorCritic",
-            "record_interval": -1,
-            "resume": False,
-            "resume_path": None,
-            "run_name": "",
-            "runner_class_name": "runner_class_name",
-            "save_interval": 100,
-        },
-        "runner_class_name": "OnPolicyRunner",
+        "checkpoint": -1,
+        "experiment_name": exp_name,
+        "load_run": -1,
+        "log_interval": 1,
+        "max_iterations": max_iterations,
+        "num_steps_per_env": 24,
+        "record_interval": -1,
+        "resume": False,
+        "resume_path": None,
+        "run_name": "",
+        "runner_class_name": "runner_class_name",
+        "save_interval": 100,
+        "empirical_normalization": False,
         "seed": 1,
     }
 
@@ -140,7 +137,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--exp_name", type=str, default="go2-walking")
     parser.add_argument("-B", "--num_envs", type=int, default=4096)
-    parser.add_argument("--max_iterations", type=int, default=100)
+    parser.add_argument("--max_iterations", type=int, default=10000)
     args = parser.parse_args()
 
     gs.init(logging_level="warning")
@@ -156,8 +153,6 @@ def main():
     env = Go2Env(
         num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg
     )
-
-    env = VecEnvWrapper(env)
 
     runner = OnPolicyRunner(env, train_cfg, log_dir, device="cuda:0")
 

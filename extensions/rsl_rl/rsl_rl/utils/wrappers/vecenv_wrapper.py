@@ -2,20 +2,6 @@
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
-
-"""Wrapper to configure a :class:`ManagerBasedRLEnv` or :class:`DirectRlEnv` instance to RSL-RL vectorized environment.
-
-The following example shows how to wrap an environment for RSL-RL:
-
-.. code-block:: python
-
-    from omni.isaac.lab_tasks.utils.wrappers.rsl_rl import RslRlVecEnvWrapper
-
-    env = RslRlVecEnvWrapper(env)
-
-"""
-
-
 import gymnasium as gym
 import torch
 
@@ -24,7 +10,7 @@ from rsl_rl.env import VecEnv
 class RslRlVecEnvWrapper(VecEnv):
     def __init__(self, env):
         # check that input is valid
-        if not isinstance(env.unwrapped, ) and not isinstance(env.unwrapped, DirectRLEnv):
+        if not isinstance(env.unwrapped) and not isinstance(env.unwrapped):
             raise ValueError(
                 f" {type(env)}"
             )
