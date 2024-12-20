@@ -23,7 +23,7 @@ class RslRlVecEnvWrapperextra(RslRlVecEnvWrapper):
         self.num_actions = self.env.num_actions
         self.num_obs = self.env.num_obs
         # -- privileged observations
-        if (hasattr(self.unwrapped, "num_privileged_obs")):
+        if self.env.num_privileged_obs is not None:
             self.num_privileged_obs = self.env.num_privileged_obs
         # reset at the start since the RSL-RL runner does not call reset
         self.env.reset()
