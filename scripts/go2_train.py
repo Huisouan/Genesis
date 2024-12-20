@@ -4,6 +4,7 @@ import pickle
 import shutil
 
 from extensions.env.go2_env import Go2Env
+from rsl_rl.utils. import Go2EnvConfig
 from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
@@ -155,6 +156,8 @@ def main():
     env = Go2Env(
         num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg
     )
+
+    env = VecEnvWrapper(env)
 
     runner = OnPolicyRunner(env, train_cfg, log_dir, device="cuda:0")
 
