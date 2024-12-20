@@ -2,7 +2,6 @@
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
-import gymnasium as gym
 import torch
 
 from rsl_rl.env import VecEnv
@@ -50,7 +49,7 @@ class RslRlVecEnvWrapper(VecEnv):
         return str(self)
 
     """
-    Properties -- Gym.Wrapper
+    Properties -- Wrapper
     """
 
     @property
@@ -64,12 +63,12 @@ class RslRlVecEnvWrapper(VecEnv):
         return self.env.render_mode
 
     @property
-    def observation_space(self) -> gym.Space:
+    def observation_space(self) :
         """Returns the :attr:`Env` :attr:`observation_space`."""
         return self.env.observation_space
 
     @property
-    def action_space(self) -> gym.Space:
+    def action_space(self) :
         """Returns the :attr:`Env` :attr:`action_space`."""
         return self.env.action_space
 

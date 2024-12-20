@@ -10,8 +10,8 @@ import torch
 from collections import deque
 from torch.utils.tensorboard import SummaryWriter as TensorboardSummaryWriter
 
-from ... import rsl_rl
-from ..ppo_algorithm import ASEV1
+import rsl_rl
+from ..algorithms import ASEV1
 from ..env import VecEnv
 from ..modules import EmpiricalNormalization,ASEV1
 from ..utils import store_code_state
