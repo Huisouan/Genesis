@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import torch
 
-from rsl_rl.env import VecEnv
+from rsl_rl.env.vec_env import VecEnv
 from rl_lab.env.go2_env import Go2Env
 class RslRlVecEnvWrapper(VecEnv):
     def __init__(self, env:Go2Env):
