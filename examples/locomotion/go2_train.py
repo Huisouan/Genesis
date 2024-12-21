@@ -2,7 +2,7 @@ import argparse
 import os
 import pickle
 import shutil
-
+from rl_lab .env.config import *
 from rl_lab.env.go2_env import Go2Env
 from rsl_rl.runners import *
 from rsl_rl.utils.wrappers.vecenv_wrapper import RslRlVecEnvWrapper
