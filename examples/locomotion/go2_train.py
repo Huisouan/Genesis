@@ -3,7 +3,7 @@ import os
 import pickle
 import shutil
 
-from go2_env import Go2Env
+from rl_lab.env.go2_env import Go2Env
 from rsl_rl.runners import OnPolicyRunner
 from rsl_rl.utils.wrappers.vecenv_wrapper import RslRlVecEnvWrapper
 import genesis as gs
@@ -13,6 +13,7 @@ def get_train_cfg(exp_name, max_iterations):
 
     train_cfg_dict = {
         "algorithm": {
+            "class_name": "PPO",
             "clip_param": 0.2,
             "desired_kl": 0.01,
             "entropy_coef": 0.01,
@@ -28,28 +29,26 @@ def get_train_cfg(exp_name, max_iterations):
         },
         "init_member_classes": {},
         "policy": {
+            "class_name": "ActorCritic",
             "activation": "elu",
             "actor_hidden_dims": [512, 256, 128],
             "critic_hidden_dims": [512, 256, 128],
             "init_noise_std": 1.0,
         },
-        "runner": {
-            "algorithm_class_name": "PPO",
-            "checkpoint": -1,
-            "experiment_name": exp_name,
-            "load_run": -1,
-            "log_interval": 1,
-            "max_iterations": max_iterations,
-            "num_steps_per_env": 24,
-            "policy_class_name": "ActorCritic",
-            "record_interval": -1,
-            "resume": False,
-            "resume_path": None,
-            "run_name": "",
-            "runner_class_name": "runner_class_name",
-            "save_interval": 100,
-        },
+        "checkpoint": -1,
+        "experiment_name": exp_name,
+        "load_run": -1,
+        "log_interval": 1,
+        "max_iterations": max_iterations,
+        "num_steps_per_env": 24,
+        "record_interval": -1,
+        "resume": False,
+        "resume_path": None,
+        "run_name": "",
+        "runner_class_name": "runner_class_name",
+        "save_interval": 100,
         "runner_class_name": "OnPolicyRunner",
+        "empirical_normalization": False,
         "seed": 1,
     }
 
