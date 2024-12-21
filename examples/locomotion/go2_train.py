@@ -4,7 +4,7 @@ import pickle
 import shutil
 
 from rl_lab.env.go2_env import Go2Env
-from rsl_rl.runners import OnPolicyRunner
+from rsl_rl.runners import *
 from rsl_rl.utils.wrappers.vecenv_wrapper import RslRlVecEnvWrapper
 import genesis as gs
 
@@ -156,8 +156,10 @@ def main():
     )
 
     env =RslRlVecEnvWrapper(env)
-
-    runner = OnPolicyRunner(env, train_cfg, log_dir, device="cuda:0")
+    runner_class = eval(train_cfg.pop("runner_class_name"))  # ActorCritic
+    
+    
+    runner:OnPolicyRunner = runner_class(env, train_cfg, log_dir, device="cuda:0")
 
     pickle.dump(
         [env_cfg, obs_cfg, reward_cfg, command_cfg, train_cfg],
