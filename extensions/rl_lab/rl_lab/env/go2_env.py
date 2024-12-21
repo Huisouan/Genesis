@@ -166,7 +166,7 @@ class Go2Env:
             self.episode_sums[name] += rew
 
         # compute observations
-        self.obs_buf = torch.cat(
+        self.obs_buf["policy"] = torch.cat(
             [
                 self.base_ang_vel * self.obs_scales["ang_vel"],  # 3
                 self.projected_gravity,  # 3
