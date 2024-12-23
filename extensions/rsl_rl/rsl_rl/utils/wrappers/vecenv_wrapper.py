@@ -5,9 +5,9 @@
 import torch
 
 from rsl_rl.env.vec_env import VecEnv
-from rl_lab.env.go2_env import Go2Env
+from rl_lab.env import *
 class RslRlVecEnvWrapper(VecEnv):
-    def __init__(self, env:Go2Env):
+    def __init__(self, env:Go2BaseEnv):
         """Initializes the wrapper.
 
         Note:

@@ -3,10 +3,10 @@ import os
 import pickle
 import shutil
 
-from rl_lab.env.go2_env import Go2Env
+from rl_lab.env import *
+from rl_lab.config import * 
 from rsl_rl.runners import OnPolicyRunner
 from rsl_rl.utils.wrappers import RslRlVecEnvWrapper
-from rl_lab.env.config import * 
 
 import genesis as gs
 
@@ -31,7 +31,7 @@ def main():
         shutil.rmtree(log_dir)
     os.makedirs(log_dir, exist_ok=True)
     #创建Go2Env环境
-    env = Go2Env(
+    env = Go2BaseEnv(
         num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg
     )
     #使用RslRlVecEnvWrapper包装环境

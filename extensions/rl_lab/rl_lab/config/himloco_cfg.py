@@ -5,9 +5,6 @@ class Go2Himloco():
         self.env_cfg = BaseEnvCfg()
         self.train_cfg = BaseTrainCfg(exp_name, max_iterations)
         
-        self.env_cfg.env_cfg.
-    
-    
     
     def get_env_cfg(self):
         return self.env_cfg.get_cfg()
