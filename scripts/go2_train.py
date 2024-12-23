@@ -5,7 +5,7 @@ import shutil
 import sys
 from rl_lab.env import *
 from rl_lab.config import * 
-from rsl_rl.runners import OnPolicyRunner
+from rsl_rl.runners import *
 from rsl_rl.utils.wrappers import RslRlVecEnvWrapper
 
 import genesis as gs
