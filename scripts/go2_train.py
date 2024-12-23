@@ -9,7 +9,7 @@ from rsl_rl.runners import *
 from rsl_rl.utils.wrappers import RslRlVecEnvWrapper
 
 import genesis as gs
-
+print(gs.__file__)  # 打印出 genesis 模块的实际路径
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--exp_name", type=str, default="Go2ActorCritic")

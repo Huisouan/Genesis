@@ -86,6 +86,7 @@
     "python.analysis.extraPaths": [
         "${workspaceFolder}/extensions/rsl_rl",
         "${workspaceFolder}/extensions/rl_lab",
+        "${workspaceFolder}",
     ],
     "MicroPython.executeButton": [
         {
