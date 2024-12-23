@@ -5,7 +5,7 @@ import shutil
 
 from rl_lab.env.go2_env import Go2Env
 from rsl_rl.runners import OnPolicyRunner
-from rsl_rl.utils.wrappers import RslRlVecEnvWrapperextra
+from rsl_rl.utils.wrappers import RslRlVecEnvWrapper
 import genesis as gs
 
 
@@ -154,7 +154,7 @@ def main():
         num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg
     )
 
-    env = RslRlVecEnvWrapperextra(env)
+    env = RslRlVecEnvWrapper(env)
 
     runner = OnPolicyRunner(env, train_cfg, log_dir, device="cuda:0")
 
