@@ -75,5 +75,5 @@ class BaseEnvCfg:
             "ang_vel_range": [0, 0],
         }
 
-def get_cfg(self):
-    return self.__dict__
+    def get_cfg(self):
+        return (self.env_cfg, self.obs_cfg, self.reward_cfg, self.command_cfg)

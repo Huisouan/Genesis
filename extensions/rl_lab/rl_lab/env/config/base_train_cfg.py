@@ -38,5 +38,5 @@ class BaseTrainCfg:
         self.empirical_normalization = False
         self.seed = 1
 
-def get_cfg(self):
-    return self.__dict__
+    def to_dict(self):
+        return self.__dict__.copy()
