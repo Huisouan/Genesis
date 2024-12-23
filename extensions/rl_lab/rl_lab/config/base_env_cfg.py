@@ -1,5 +1,6 @@
 class EnvConfig:
     def __init__(self):
+        self.env_name = "Go2BaseEnv"
         self.num_actions = 12
         self.default_joint_angles = {  # [rad]
             "FL_hip_joint": 0.0,

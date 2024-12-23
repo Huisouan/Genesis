@@ -28,7 +28,7 @@ class ASE1OnPolicyRunner:
         self.env = env
         obs, extras = self.env.get_observations()
         num_obs = obs.shape[1]
-        amp_data:AmpMotion = self.env.unwrapped.amp_loader
+        amp_data:AmpMotion = self.env.amp_loader
         if "critic" in extras["observations"]:
             num_critic_obs = extras["observations"]["critic"].shape[1]
         else:

@@ -2,7 +2,7 @@ import argparse
 import os
 import pickle
 import shutil
-
+import sys
 from rl_lab.env import *
 from rl_lab.config import * 
 from rsl_rl.runners import OnPolicyRunner
@@ -31,13 +31,17 @@ def main():
         shutil.rmtree(log_dir)
     os.makedirs(log_dir, exist_ok=True)
     #创建Go2Env环境
-    env = Go2BaseEnv(
-        num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg
-    )
+    env_class_name = env_cfg['env_name']
+    env_class = getattr(sys.modules[__name__], env_class_name)
+    env = env_class(num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg)
     #使用RslRlVecEnvWrapper包装环境
     env = RslRlVecEnvWrapper(env)
     #创建OnPolicyRunner
-    runner = OnPolicyRunner(env, train_cfg, log_dir, device="cuda:0")
+    # 假设 OnPolicyRunner 类在当前命名空间中是可访问的
+    # 如果不在当前命名空间中，需要导入相应的模块
+    runner_class_name = train_cfg['runner_class_name']
+    runner_class = getattr(sys.modules[__name__], runner_class_name)
+    runner = runner_class(env, train_cfg, log_dir, device="cuda:0")
 
     pickle.dump(
         [env_cfg, obs_cfg, reward_cfg, command_cfg, train_cfg],

@@ -2,7 +2,7 @@ import torch
 import math
 import genesis as gs
 from genesis.utils.geom import quat_to_xyz, transform_by_quat, inv_quat, transform_quat_by_quat
-
+from genesis.engine.entities.rigid_entity.rigid_entity import RigidEntity
 
 def gs_rand_float(lower, upper, shape, device):
     return (upper - lower) * torch.rand(size=shape, device=device) + lower
@@ -56,7 +56,7 @@ class Go2BaseEnv:
         self.base_init_pos = torch.tensor(self.env_cfg["base_init_pos"], device=self.device)
         self.base_init_quat = torch.tensor(self.env_cfg["base_init_quat"], device=self.device)
         self.inv_base_init_quat = inv_quat(self.base_init_quat)
-        self.robot = self.scene.add_entity(
+        self.robot:RigidEntity = self.scene.add_entity(
             gs.morphs.URDF(
                 file="urdf/go2/urdf/go2.urdf",
                 pos=self.base_init_pos.cpu().numpy(),
