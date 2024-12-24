@@ -1,10 +1,16 @@
 import genesis as gs
+import numpy 
 gs.init(backend=gs.cpu)
-
-scene = gs.Scene(show_viewer=True)
+base_init_pos = [0.0, 0.0, 0.42]
+base_init_quat = [0.0, 0.0, 0.0, 1.0]
+scene = gs.Scene(show_viewer=False)
 plane = scene.add_entity(gs.morphs.Plane())
-franka = scene.add_entity(
-    gs.morphs.MJCF(file='xml/franka_emika_panda/panda.xml'),
+robot = scene.add_entity(
+    gs.morphs.URDF(
+        file="urdf/go2/urdf/go2.urdf",
+        pos=base_init_pos,
+        quat=base_init_quat,
+    ),
 )
 
 scene.build()
