@@ -5,3 +5,6 @@
 2.部分rsl_rl的内容还没有作环境匹配，因此我们需要针对这些项目作环境匹配
 
 3.genesis里面貌似没有雷达和摄像头仿真，查看examples，看看有没有可以替代的方案。
+
+Fangzheng Plan
+12/25 try Genesis on Ubuntu system, read the code of examples-grasp
