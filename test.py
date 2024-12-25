@@ -3,7 +3,7 @@ import genesis as gs
 gs.init(backend=gs.cpu)
 
 scene = gs.Scene(
-    show_viewer = False,
+    show_viewer = True,
     viewer_options = gs.options.ViewerOptions(
         res           = (1280, 960),
         camera_pos    = (3.5, 0.0, 2.5),
@@ -45,7 +45,7 @@ scene.build()
 cam.start_recording()
 import numpy as np
 
-for i in range(120):
+for i in range(1200000):
     scene.step()
     cam.set_pose(
         pos    = (3.0 * np.sin(i / 60), 3.0 * np.cos(i / 60), 2.5),
