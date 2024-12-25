@@ -7,8 +7,7 @@
 
 
 import numpy as np
-from scipy import interpolate
-
+from scipy.interpolate import RegularGridInterpolator
 
 def fractal_terrain(terrain, levels=8, scale=1.0):
     """
@@ -39,6 +38,8 @@ def fractal_terrain(terrain, levels=8, scale=1.0):
     return terrain
 
 
+
+
 def random_uniform_terrain(
     terrain,
     min_height,
@@ -54,7 +55,7 @@ def random_uniform_terrain(
         min_height (float): the minimum height of the terrain [meters]
         max_height (float): the maximum height of the terrain [meters]
         step (float): minimum height change between two points [meters]
-        downsampled_scale (float): distance between two randomly sampled points ( musty be larger or equal to terrain.horizontal_scale)
+        downsampled_scale (float): distance between two randomly sampled points ( must be larger or equal to terrain.horizontal_scale)
 
     """
     if downsampled_scale is None:
@@ -77,11 +78,12 @@ def random_uniform_terrain(
     x = np.linspace(0, terrain.width * terrain.horizontal_scale, height_field_downsampled.shape[0])
     y = np.linspace(0, terrain.length * terrain.horizontal_scale, height_field_downsampled.shape[1])
 
-    f = interpolate.interp2d(y, x, height_field_downsampled, kind="linear")
+    # Use RegularGridInterpolator for interpolation
+    interpolator = RegularGridInterpolator((y, x), height_field_downsampled)
 
     x_upsampled = np.linspace(0, terrain.width * terrain.horizontal_scale, terrain.width)
     y_upsampled = np.linspace(0, terrain.length * terrain.horizontal_scale, terrain.length)
-    z_upsampled = np.rint(f(y_upsampled, x_upsampled))
+    z_upsampled = interpolator(np.array(np.meshgrid(y_upsampled, x_upsampled, indexing='ij')).T)
 
     terrain.height_field_raw += z_upsampled.astype(np.int16)
     return terrain
