@@ -92,19 +92,9 @@ class Go2AseEnv(Go2BaseEnv):
             self.rew_buf += rew
             self.episode_sums[name] += rew
 
-        # compute observations
-        self.obs_buf["policy"] = torch.cat(
-            [
-                self.base_ang_vel * self.obs_scales["ang_vel"],  # 3
-                self.projected_gravity,  # 3
-                (self.dof_pos - self.default_dof_pos) * self.obs_scales["dof_pos"],  # 12
-                self.dof_vel * self.obs_scales["dof_vel"],  # 12
-                self.actions,  # 12
-            ],
-            axis=-1,
-        )
-        self.
+        self.compute_observations()
+
         self.last_actions[:] = self.actions[:]
         self.last_dof_vel[:] = self.dof_vel[:]
 
-        return self.obs_buf, self.rew_buf, self.reset_buf, self.extras    
+        return self.obs_buf, self.rew_buf, self.reset_buf, self.extras
