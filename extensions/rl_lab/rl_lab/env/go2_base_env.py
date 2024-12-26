@@ -2,7 +2,6 @@ import torch
 import math
 import genesis as gs
 from genesis.utils.geom import quat_to_xyz, transform_by_quat, inv_quat, transform_quat_by_quat
-
 def gs_rand_float(lower, upper, shape, device):
     return (upper - lower) * torch.rand(size=shape, device=device) + lower
 
@@ -50,9 +49,19 @@ class Go2BaseEnv:
             ),
             show_viewer=show_viewer,
         )
-
+        horizontal_scale = 0.25
+        vertical_scale = 0.005
         # add plain
-        self.scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
+        self.scene.add_entity(
+            morph=gs.morphs.Terrain(
+                n_subterrains=(2, 2),
+                horizontal_scale=horizontal_scale,
+                vertical_scale=vertical_scale,
+                subterrain_types=[
+                    ["flat_terrain", "random_uniform_terrain"],
+                    ["pyramid_sloped_terrain", "discrete_obstacles_terrain"],
+            ],            
+            ))
 
         # add robot
         self.base_init_pos = torch.tensor(self.env_cfg["base_init_pos"], device=self.device)
@@ -82,7 +91,7 @@ class Go2BaseEnv:
         for name in self.reward_scales.keys():
             self.reward_scales[name] *= self.dt
             self.reward_functions[name] = getattr(self, "_reward_" + name)
-            self.episode_sums[name] = torch.zeros((device,), device=device, dtype=gs.tc_float)
+            self.episode_sums[name] = torch.zeros((num_envs,), device=device, dtype=gs.tc_float)
 
         # initialize buffers
         self.base_lin_vel = torch.zeros((num_envs, 3), device=device, dtype=gs.tc_float)
@@ -188,6 +197,7 @@ class Go2BaseEnv:
         return self.obs_buf
 
     def get_privileged_observations(self):
+        
         return None
 
     def reset_idx(self, envs_idx):
@@ -281,19 +291,6 @@ class Go2BaseEnv:
         # Penalize base height away from target
         base_height = self._get_base_heights()
         return torch.square(base_height - self.cfg.rewards.base_height_target)
-    
-    def _reward_foot_clearance(self):
-        cur_footpos_translated = self.feet_pos - self.root_states[:, 0:3].unsqueeze(1)
-        footpos_in_body_frame = torch.zeros(self.num_envs, len(self.feet_indices), 3, device=self.device)
-        cur_footvel_translated = self.feet_vel - self.root_states[:, 7:10].unsqueeze(1)
-        footvel_in_body_frame = torch.zeros(self.num_envs, len(self.feet_indices), 3, device=self.device)
-        for i in range(len(self.feet_indices)):
-            footpos_in_body_frame[:, i, :] = quat_rotate_inverse(self.base_quat, cur_footpos_translated[:, i, :])
-            footvel_in_body_frame[:, i, :] = quat_rotate_inverse(self.base_quat, cur_footvel_translated[:, i, :])
-        
-        height_error = torch.square(footpos_in_body_frame[:, :, 2] - self.cfg.rewards.clearance_height_target).view(self.num_envs, -1)
-        foot_leteral_vel = torch.sqrt(torch.sum(torch.square(footvel_in_body_frame[:, :, :2]), dim=2)).view(self.num_envs, -1)
-        return torch.sum(height_error * foot_leteral_vel, dim=1)
     
     def _reward_smoothness(self):
         # second order smoothness
