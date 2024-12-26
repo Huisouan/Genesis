@@ -159,6 +159,14 @@ class Go2BaseEnv:
             self.rew_buf += rew
             self.episode_sums[name] += rew
 
+        self.compute_observations()
+
+        self.last_actions[:] = self.actions[:]
+        self.last_dof_vel[:] = self.dof_vel[:]
+
+        return self.obs_buf, self.rew_buf, self.reset_buf, self.extras
+
+    def compute_observations(self):
         # compute observations
         self.obs_buf["policy"] = torch.cat(
             [
@@ -171,12 +179,8 @@ class Go2BaseEnv:
             ],
             axis=-1,
         )
-
-        self.last_actions[:] = self.actions[:]
-        self.last_dof_vel[:] = self.dof_vel[:]
-
-        return self.obs_buf, self.rew_buf, self.reset_buf, self.extras
-
+        if self.obs_cfg["use_privileged_obs"]:
+            raise NotImplementedError("Privileged observation not implemented yet")
     def get_observations(self):
         return self.obs_buf
 
