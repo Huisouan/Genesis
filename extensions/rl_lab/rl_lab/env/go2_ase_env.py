@@ -2,8 +2,10 @@ import torch
 from genesis.utils.geom import quat_to_xyz, transform_by_quat, inv_quat, transform_quat_by_quat
 import genesis as gs
 from . import Go2BaseEnv
-from rl_lab.assets.loder_for_algs import AmpMotion
+from rl_lab.assets.motion_loader import AMPLoader
 from rl_lab.utils.kinematics import urdf
+
+
 class Go2AseEnv(Go2BaseEnv):
     def __init__(self,num_envs, env_cfg, obs_cfg, reward_cfg, command_cfg):
         super().__init__(num_envs=num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg)
@@ -15,12 +17,10 @@ class Go2AseEnv(Go2BaseEnv):
                 chain_ee_instance = urdf.build_serial_chain_from_urdf(urdf_content, ee_name).to(device=self.device)
                 self.chain_ee.append(chain_ee_instance)
 
-        self.amp_loader = AmpMotion(
-            data_dir ="datasets/mocap_motions_go2",
-            datatype="isaacgym",
-            file_type="txt",
-            data_spaces = None,
-            env_step_duration = 0.005,
+        self.amp_loader = AMPLoader(
+            device=self.device,
+            motion_files=self.env_cfg.amp_motion_files,
+            time_between_frames=self.dt 
         )
 
     def get_amp_observations(self):
