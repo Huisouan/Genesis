@@ -38,7 +38,7 @@ pip install -e.
 
 #最后我们需要安装几个额外的pip包来保证所有代码都能正常运行
 
-pip install tensorboard,einops,open3d
+pip install tensorboard einops open3d
 
 
 ```
