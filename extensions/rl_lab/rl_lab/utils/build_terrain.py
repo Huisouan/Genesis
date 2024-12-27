@@ -4,8 +4,8 @@ from genesis.ext import trimesh
 from typing import Any, List, Optional, Tuple, Union
 from genesis.ext.isaacgym import terrain_utils as isaacgym_terrain_utils
 from genesis.options.morphs import Morph
+
 class RoughTerrain(Morph):
-    
     mesh_type: str = 'trimesh'  # "heightfield" # none, plane, heightfield or trimesh
     horizontal_scale: float = 0.1  # [m]
     vertical_scale: float = 0.005  # [m]
@@ -21,7 +21,8 @@ class RoughTerrain(Morph):
     selected: bool = False  # select a unique terrain type and pass all arguments
     terrain_kwargs: Optional[dict] = None  # Dict of arguments for selected terrain
     max_init_terrain_level: int = 5  # starting curriculum state
-    subterrain_size: float = 8.0  # size of subterrain in meters
+    terrain_length = 8.
+    terrain_width = 8.
     num_rows: int = 10  # number of terrain rows (levels)
     num_cols: int = 20  # number of terrain cols (types)
     # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete]
@@ -31,242 +32,190 @@ class RoughTerrain(Morph):
 
     def __init__(self, **data):
         super().__init__(**data)    
-        
-        self.cfg = cfg
-        self.type = cfg.mesh_type
-        if self.type in ["none", 'plane']:
-            return
-        
+        self.type = self.mesh_type
         # 设置环境尺寸和比例
-        self.env_length = cfg.terrain_length
-        self.env_width = cfg.terrain_width
-        self.proportions = [np.sum(cfg.terrain_proportions[:i+1]) for i in range(len(cfg.terrain_proportions))]
+        self.env_length = self.terrain_length
+        self.env_width = self.terrain_width
+        self.proportions = [np.sum(self.terrain_proportions[:i+1]) for i in range(len(self.terrain_proportions))]
 
-        self.cfg.num_sub_terrains = cfg.num_rows * cfg.num_cols
-        self.env_origins = np.zeros((cfg.num_rows, cfg.num_cols, 3))
+        self.num_sub_terrains = self.num_rows * self.num_cols
+        self.env_origins = np.zeros((self.num_rows, self.num_cols, 3))
 
         # 计算每个环境的像素宽度和长度
-        self.width_per_env_pixels = int(self.env_width / cfg.horizontal_scale)
-        self.length_per_env_pixels = int(self.env_length / cfg.horizontal_scale)
+        self.width_per_env_pixels = int(self.env_width / self.horizontal_scale)
+        self.length_per_env_pixels = int(self.env_length / self.horizontal_scale)
 
         # 边界大小和总行数、列数
-        self.border = int(cfg.border_size/self.cfg.horizontal_scale)
-        self.tot_cols = int(cfg.num_cols * self.width_per_env_pixels) + 2 * self.border
-        self.tot_rows = int(cfg.num_rows * self.length_per_env_pixels) + 2 * self.border
+        self.border = int(self.border_size/self.horizontal_scale)
+        self.tot_cols = int(self.num_cols * self.width_per_env_pixels) + 2 * self.border
+        self.tot_rows = int(self.num_rows * self.length_per_env_pixels) + 2 * self.border
 
         # 初始化高度场
         self.height_field_raw = np.zeros((self.tot_rows, self.tot_cols), dtype=np.int16)
         
-        # 根据配置生成不同类型的地形
-        if cfg.curriculum:
-            self.curiculum()
-        elif cfg.selected:
-            self.selected_terrain()
-        else:    
-            self.randomized_terrain()   
-        
-        self.heightsamples = self.height_field_raw
-        if self.type=="trimesh":
-            self.vertices, self.triangles = terrain_utils.convert_heightfield_to_trimesh(
-                self.height_field_raw,
-                self.cfg.horizontal_scale,
-                self.cfg.vertical_scale,
-                self.cfg.slope_treshold)
 
-    def randomized_terrain(self):
-        """
-        随机生成地形。
-        """
-        for k in range(self.cfg.num_sub_terrains):
-            # 获取环境坐标
-            (i, j) = np.unravel_index(k, (self.cfg.num_rows, self.cfg.num_cols))
 
-            choice = np.random.uniform(0, 1)
-            difficulty = np.random.choice([0.5, 0.75, 0.9])
-            terrain = self.make_terrain(choice, difficulty)
-            self.add_terrain_to_map(terrain, i, j)
-        
-    def curiculum(self):
-        """
-        按照课程表生成地形。
-        """
-        for j in range(self.cfg.num_cols):
-            for i in range(self.cfg.num_rows):
-                difficulty = i / self.cfg.num_rows
-                choice = j / self.cfg.num_cols + 0.001
 
-                terrain = self.make_terrain(choice, difficulty)
-                self.add_terrain_to_map(terrain, i, j)
 
-    def selected_terrain(self):
-        """
-        选择特定类型的地形。
-        """
-        terrain_type = self.cfg.terrain_kwargs.pop('type')
-        for k in range(self.cfg.num_sub_terrains):
-            # 获取环境坐标
-            (i, j) = np.unravel_index(k, (self.cfg.num_rows, self.cfg.num_cols))
-
-            terrain = isaacgym_terrain_utils.SubTerrain("terrain",
-                              width=self.width_per_env_pixels,
-                              length=self.width_per_env_pixels,
-                              vertical_scale=self.cfg.vertical_scale,
-                              horizontal_scale=self.cfg.horizontal_scale)
-
-            eval(terrain_type)(terrain, **self.cfg.terrain_kwargs.terrain_kwargs)
-            self.add_terrain_to_map(terrain, i, j)
-
-    def add_terrain_to_map(self, terrain, row, col):
-        """
-        将生成的地形添加到地图中。
-
-        参数:
-            terrain (SubTerrain): 生成的地形对象。
-            row (int): 行索引。
-            col (int): 列索引。
-        """
-        i = row
-        j = col
-        # 地图坐标系
-        start_x = self.border + i * self.length_per_env_pixels
-        end_x = self.border + (i + 1) * self.length_per_env_pixels
-        start_y = self.border + j * self.width_per_env_pixels
-        end_y = self.border + (j + 1) * self.width_per_env_pixels
-        self.height_field_raw[start_x: end_x, start_y:end_y] = terrain.height_field_raw
-
-        env_origin_x = (i + 0.5) * self.env_length
-        env_origin_y = (j + 0.5) * self.env_width
-        x1 = int((self.env_length/2. - 1) / terrain.horizontal_scale)
-        x2 = int((self.env_length/2. + 1) / terrain.horizontal_scale)
-        y1 = int((self.env_width/2. - 1) / terrain.horizontal_scale)
-        y2 = int((self.env_width/2. + 1) / terrain.horizontal_scale)
-        env_origin_z = np.max(terrain.height_field_raw[x1:x2, y1:y2])*terrain.vertical_scale
-        self.env_origins[i, j] = [env_origin_x, env_origin_y, env_origin_z]
-        
-
-def parse_terrain(morph: RoughTerrain, surface):
-# 在 genesis/utils/terrain.py 文件中
+def randomized_terrain(terrain):
     """
-    根据 morph 传递的配置生成网格（和高度场）。
-
-    ------------------------------------------------------------------------------------------------------
-    如果 morph.height_field 没有传递，则根据以下配置生成高度场：
-        n_subterrains    : Tuple[int, int]     = (3, 3)     # x 和 y 方向上的子地形数量
-        subterrain_types : Any                 = [
-                ['flat_terrain', 'random_uniform_terrain', 'pyramid_sloped_terrain'],
-                ['pyramid_sloped_terrain', 'discrete_obstacles_terrain', 'wave_terrain'],
-                ['random_uniform_terrain', 'pyramid_stairs_terrain', 'pyramid_sloped_terrain'],
-        ]                                                   # x 和 y 方向上的子地形类型
-    如果传递了 morph.height_field，则忽略 (n_subterrains, subterrain_size, subterrain_types)。
-    ------------------------------------------------------------------------------------------------------
-
-    返回值
-    --------------------------
-    vmesh        : Mesh
-    mesh         : Mesh
-    height_field : np.ndarray
+    随机生成地形。
     """
+    for k in range(terrain.num_sub_terrains):
+        # 获取环境坐标
+        (i, j) = np.unravel_index(k, (terrain.num_rows, terrain.num_cols))
 
-    if morph.height_field is None:
+        choice = np.random.uniform(0, 1)
+        difficulty = np.random.choice([0.5, 0.75, 0.9])
+        terrain_obj = make_terrain(choice, difficulty, terrain.horizontal_scale, terrain.vertical_scale, terrain.env_length, terrain.env_width)
+        add_terrain_to_map(terrain, terrain_obj, i, j)
+    
+def curiculum(terrain:RoughTerrain):
+    """
+    按照课程表生成地形。
+    """
+    for j in range(terrain.num_cols):
+        for i in range(terrain.num_rows):
+            difficulty = i / terrain.num_rows
+            choice = j / terrain.num_cols + 0.001
 
-        subterrain_rows = int(morph.subterrain_size[0] / morph.horizontal_scale)
-        subterrain_cols = int(morph.subterrain_size[1] / morph.horizontal_scale)
-        heightfield = np.zeros(
-            np.array(morph.n_subterrains) * np.array([subterrain_rows, subterrain_cols]), dtype=np.int16
+            terrain_obj = make_terrain(choice, difficulty, terrain.horizontal_scale, terrain.vertical_scale, terrain.env_length, terrain.env_width)
+            add_terrain_to_map(terrain, terrain_obj, i, j)
+
+def selected_terrain(terrain:RoughTerrain):
+    """
+    选择特定类型的地形。
+    """
+    terrain_type = terrain.terrain_kwargs.pop('type')
+    for k in range(terrain.num_sub_terrains):
+        # 获取环境坐标
+        (i, j) = np.unravel_index(k, (terrain.num_rows, terrain.num_cols))
+
+        terrain_obj = isaacgym_terrain_utils.SubTerrain("terrain",
+                          width=terrain.width_per_env_pixels,
+                          length=terrain.width_per_env_pixels,
+                          vertical_scale=terrain.vertical_scale,
+                          horizontal_scale=terrain.horizontal_scale)
+
+        eval(terrain_type)(terrain_obj, **terrain.terrain_kwargs.terrain_kwargs)
+        add_terrain_to_map(terrain, terrain_obj, i, j)
+
+def add_terrain_to_map(terrain:RoughTerrain, terrain_obj:isaacgym_terrain_utils.SubTerrain, row, col):
+    """
+    将生成的地形添加到地图中。
+
+    参数:
+        terrain_obj (SubTerrain): 生成的地形对象。
+        row (int): 行索引。
+        col (int): 列索引。
+    """
+    # 初始化行和列索引
+    i = row
+    j = col
+    
+    # 计算地形在地图上的坐标范围
+    start_x = terrain.border + i * terrain.length_per_env_pixels
+    end_x = terrain.border + (i + 1) * terrain.length_per_env_pixels
+    start_y = terrain.border + j * terrain.width_per_env_pixels
+    end_y = terrain.border + (j + 1) * terrain.width_per_env_pixels
+    
+    # 将生成的地形高度数据添加到地图的相应位置
+    terrain.height_field_raw[start_x: end_x, start_y:end_y] = terrain_obj.height_field_raw
+
+    # 计算环境原点在地图上的位置
+    env_origin_x = (i + 0.5) * terrain.env_length
+    env_origin_y = (j + 0.5) * terrain.env_width
+
+    # 计算环境原点的z轴坐标
+    x1 = int((terrain.env_length/2. - 1) / terrain.horizontal_scale)
+    x2 = int((terrain.env_length/2. + 1) / terrain.horizontal_scale)
+    y1 = int((terrain.env_width/2. - 1) / terrain.horizontal_scale)
+    y2 = int((terrain.env_width/2. + 1) / terrain.horizontal_scale)
+    env_origin_z = np.max(terrain_obj.height_field_raw[x1:x2, y1:y2])*terrain.vertical_scale
+
+    # 更新环境原点数组
+    terrain.env_origins[i, j] = [env_origin_x, env_origin_y, env_origin_z]
+
+def make_terrain(choice, difficulty, horizontal_scale, vertical_scale, env_length, env_width):
+    """
+    根据选择和难度生成地形。
+    
+    参数:
+    - choice: 用户的选择，用于决定生成哪种地形。
+    - difficulty: 地形的难度，影响地形的具体参数。
+    - horizontal_scale: 地形的水平比例。
+    - vertical_scale: 地形的垂直比例。
+    - env_length: 地形的长度。
+    - env_width: 地形的宽度。
+    
+    返回:
+    - 生成的地形对象。
+    """
+    # 根据用户的选择生成不同类型的地形
+    if choice < 0.1:
+        # 生成斜坡地形，斜率受难度影响
+        return isaacgym_terrain_utils.sloped_terrain(
+            width=env_width,
+            length=env_length,
+            vertical_scale=vertical_scale,
+            horizontal_scale=horizontal_scale,
+            slope=-0.05 * difficulty
         )
-
-        for i in range(morph.n_subterrains[0]):
-            for j in range(morph.n_subterrains[1]):
-                subterrain_type = morph.subterrain_types[i][j]
-
-                new_subterrain = isaacgym_terrain_utils.SubTerrain(
-                    width=subterrain_rows,
-                    length=subterrain_cols,
-                    vertical_scale=morph.vertical_scale,
-                    horizontal_scale=morph.horizontal_scale,
-                )
-                if not morph.randomize:
-                    saved_state = np.random.get_state()
-                    np.random.seed(0)
-
-                if subterrain_type == "flat_terrain":
-                    subterrain_height_field = np.zeros((subterrain_rows, subterrain_cols), dtype=np.int16)
-
-                elif subterrain_type == "fractal_terrain":
-                    subterrain_height_field = fractal_terrain(new_subterrain, levels=8, scale=5.0).height_field_raw
-
-                elif subterrain_type == "random_uniform_terrain":
-                    subterrain_height_field = isaacgym_terrain_utils.random_uniform_terrain(
-                        new_subterrain,
-                        min_height=-0.1,
-                        max_height=0.1,
-                        step=0.1,
-                        downsampled_scale=0.5,
-                    ).height_field_raw
-
-                elif subterrain_type == "sloped_terrain":
-                    subterrain_height_field = isaacgym_terrain_utils.sloped_terrain(
-                        new_subterrain,
-                        slope=-0.5,
-                    ).height_field_raw
-
-                elif subterrain_type == "pyramid_sloped_terrain":
-                    subterrain_height_field = isaacgym_terrain_utils.pyramid_sloped_terrain(
-                        new_subterrain,
-                        slope=-0.1,
-                    ).height_field_raw
-
-                elif subterrain_type == "discrete_obstacles_terrain":
-                    subterrain_height_field = isaacgym_terrain_utils.discrete_obstacles_terrain(
-                        new_subterrain,
-                        max_height=0.05,
-                        min_size=1.0,
-                        max_size=5.0,
-                        num_rects=20,
-                    ).height_field_raw
-
-                elif subterrain_type == "wave_terrain":
-                    subterrain_height_field = isaacgym_terrain_utils.wave_terrain(
-                        new_subterrain,
-                        num_waves=2.0,
-                        amplitude=0.1,
-                    ).height_field_raw
-
-                elif subterrain_type == "stairs_terrain":
-                    subterrain_height_field = isaacgym_terrain_utils.stairs_terrain(
-                        new_subterrain,
-                        step_width=0.75,
-                        step_height=-0.1,
-                    ).height_field_raw
-
-                elif subterrain_type == "pyramid_stairs_terrain":
-                    subterrain_height_field = isaacgym_terrain_utils.pyramid_stairs_terrain(
-                        new_subterrain,
-                        step_width=0.75,
-                        step_height=-0.1,
-                    ).height_field_raw
-
-                elif subterrain_type == "stepping_stones_terrain":
-                    subterrain_height_field = isaacgym_terrain_utils.stepping_stones_terrain(
-                        new_subterrain,
-                        stone_size=1.0,
-                        stone_distance=0.25,
-                        max_height=0.2,
-                        platform_size=0.0,
-                    ).height_field_raw
-
-                else:
-                    gs.raise_exception(f"Unsupported subterrain type: {subterrain_type}")
-
-                if not morph.randomize:
-                    np.random.set_state(saved_state)
-
-                heightfield[
-                    i * subterrain_rows : (i + 1) * subterrain_rows, j * subterrain_cols : (j + 1) * subterrain_cols
-                ] = subterrain_height_field
-
+    elif choice < 0.3:
+        # 生成离散障碍物地形，障碍物的高度受难度影响
+        return isaacgym_terrain_utils.discrete_obstacles_terrain(
+            width=env_width,
+            length=env_length,
+            vertical_scale=vertical_scale,
+            horizontal_scale=horizontal_scale,
+            max_height=0.05 * difficulty,
+            min_size=1.0,
+            max_size=5.0,
+            num_rects=20
+        )
+    elif choice < 0.6:
+        # 生成楼梯地形，楼梯的高度受难度影响
+        return isaacgym_terrain_utils.stairs_terrain(
+            width=env_width,
+            length=env_length,
+            vertical_scale=vertical_scale,
+            horizontal_scale=horizontal_scale,
+            step_width=0.75,
+            step_height=-0.1 * difficulty
+        )
+    elif choice < 0.9:
+        # 生成金字塔斜坡地形，斜率受难度影响
+        return isaacgym_terrain_utils.pyramid_sloped_terrain(
+            width=env_width,
+            length=env_length,
+            vertical_scale=vertical_scale,
+            horizontal_scale=horizontal_scale,
+            slope=-0.1 * difficulty
+        )
     else:
-        heightfield = morph.height_field
+        # 生成波浪地形，波浪的振幅受难度影响
+        return isaacgym_terrain_utils.wave_terrain(
+            width=env_width,
+            length=env_length,
+            vertical_scale=vertical_scale,
+            horizontal_scale=horizontal_scale,
+            num_waves=2.0,
+            amplitude=0.1 * difficulty
+        )
+        
+
+def parse_curriculum_terrain(morph: RoughTerrain, surface):
+# 在 genesis/utils/terrain.py 文件中
+    # 根据配置生成不同类型的地形
+    if morph.curriculum:
+        curiculum(morph)
+    elif morph.selected:
+        selected_terrain(morph)
+    else:    
+        randomized_terrain(morph)   
+    
+    heightfield = morph.height_field_raw
+
 
     tmesh, sdf_tmesh = convert_heightfield_to_watertight_trimesh(
         heightfield,
