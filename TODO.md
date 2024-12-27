@@ -8,3 +8,4 @@
 
 Fangzheng Plan
 12/25 try Genesis on Ubuntu system, read the code of examples-grasp
+12/27 finish the try on ubuntu system, download the code from issac lab, do and going to try build the mode in genesis  
