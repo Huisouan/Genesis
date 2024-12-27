@@ -8,7 +8,7 @@ from genesis.utils import linalg as lu
 from genesis.utils import mesh as mu
 from genesis.utils import mjcf as mju
 from genesis.utils import terrain as tu
-
+import rl_lab.utils.build_terrain as bt
 
 
 from genesis.utils import urdf as uu
@@ -91,6 +91,9 @@ class RigidEntity(Entity):
 
         elif isinstance(self._morph, gs.morphs.Terrain):
             self._load_terrain(self._morph, self._surface)
+        elif isinstance(self._morph, bt.MultiScaleTerrain):
+            self._load_terrain(self._morph, self._surface)
+            
         else:
             gs.raise_exception(f"Unsupported morph: {self._morph}.")
 
@@ -301,7 +304,11 @@ class RigidEntity(Entity):
             init_qpos=np.zeros(0),
         )
 
-        vmesh, mesh, self.terrain_hf = tu.parse_terrain(morph, surface)
+        if isinstance(self.morph, bt.MultiScaleTerrain):
+            vmesh, mesh, self.terrain_hf = bt.parse_terrain(morph, surface)
+        else:
+            vmesh, mesh, self.terrain_hf = tu.parse_terrain(morph, surface)
+        
         self.terrain_scale = np.array([morph.horizontal_scale, morph.vertical_scale])
 
         if morph.visualization:

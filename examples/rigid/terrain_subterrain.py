@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 import genesis as gs
-
+from rl_lab.utils.build_terrain import MultiScaleTerrain
 def main():
 
     parser = argparse.ArgumentParser()
@@ -36,7 +36,7 @@ def main():
     vertical_scale = 0.005
     ########################## entities ##########################
     terrain = scene.add_entity(
-        morph=gs.morphs.Terrain(
+        morph=MultiScaleTerrain(
         ),
     )
     ########################## build ##########################
