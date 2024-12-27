@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 import genesis as gs
-
+from rl_lab.utils.build_terrain import RoughTerrain
 
 def main():
 
@@ -38,13 +38,6 @@ def main():
     ########################## entities ##########################
     terrain = scene.add_entity(
         morph=gs.morphs.Terrain(
-            n_subterrains=(2, 2),
-            horizontal_scale=horizontal_scale,
-            vertical_scale=vertical_scale,
-            subterrain_types=[
-                ["flat_terrain", "random_uniform_terrain"],
-                ["pyramid_sloped_terrain", "discrete_obstacles_terrain"],
-            ],
         ),
     )
     ########################## build ##########################
