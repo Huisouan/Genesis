@@ -2,8 +2,7 @@ import torch
 import math
 import genesis as gs
 from genesis.utils.geom import quat_to_xyz, transform_by_quat, inv_quat, transform_quat_by_quat
-from .legged_robot import get_heights
-from .math import *
+from rl_lab.utils.math import quat_apply_yaw
 
 
 def gs_rand_float(lower, upper, shape, device):

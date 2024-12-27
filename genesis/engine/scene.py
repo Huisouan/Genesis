@@ -226,25 +226,25 @@ class Scene(RBC):
         vis_mode=None,
     ):
         """
-        Add an entity to the scene.
+        将一个实体添加到场景中。
 
-        Parameters
+        参数
         ----------
         morph : gs.morphs.Morph
-            The morph of the entity.
-        material : gs.materials.Material | None, optional
-            The material of the entity. If None, use ``gs.materials.Rigid()``.
-        surface : gs.surfaces.Surface | None, optional
-            The surface of the entity. If None, use ``gs.surfaces.Default()``.
+            实体的形态。
+        material : gs.materials.Material | None, 可选
+            实体的材质。如果为 None，则使用 ``gs.materials.Rigid()``。
+        surface : gs.surfaces.Surface | None, 可选
+            实体的表面。如果为 None，则使用 ``gs.surfaces.Default()``。
         visualize_contact : bool
-            Whether to visualize contact forces applied to this entity as arrows in the viewer and rendered images. Note that this will not be displayed in images rendered by camera using the `RayTracer` renderer.
-        vis_mode : str | None, optional
-            The visualization mode of the entity. This is a handy shortcut for setting `surface.vis_mode` without explicitly creating a surface object.
+            是否将作用于此实体的接触力作为箭头在查看器和渲染图像中可视化。请注意，这不会在使用 `RayTracer` 渲染器渲染的图像中显示。
+        vis_mode : str | None, 可选
+            实体的可视化模式。这是一个方便的快捷方式，用于设置 `surface.vis_mode` 而无需显式创建表面对象。
 
-        Returns
+        返回
         -------
         entity : genesis.Entity
-            The created entity.
+            创建的实体。
         """
         if material is None:
             material = gs.materials.Rigid()
