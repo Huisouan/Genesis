@@ -5,7 +5,6 @@ import numpy as np
 import torch
 
 import genesis as gs
-from rl_lab.utils.build_terrain import RoughTerrain
 
 def main():
 
