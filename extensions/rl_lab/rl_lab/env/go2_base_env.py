@@ -2,6 +2,10 @@ import torch
 import math
 import genesis as gs
 from genesis.utils.geom import quat_to_xyz, transform_by_quat, inv_quat, transform_quat_by_quat
+from .legged_robot import get_heights
+from .math import *
+
+
 def gs_rand_float(lower, upper, shape, device):
     return (upper - lower) * torch.rand(size=shape, device=device) + lower
 
@@ -21,6 +25,7 @@ class Go2BaseEnv:
         self.max_episode_length = math.ceil(env_cfg["episode_length_s"] / self.dt)
 
         self.env_cfg = env_cfg
+        self.terriancfg = env_cfg["terraincfg"]
         self.obs_cfg = obs_cfg
         self.reward_cfg = reward_cfg
         self.command_cfg = command_cfg
@@ -29,97 +34,6 @@ class Go2BaseEnv:
         self.reward_scales = reward_cfg["reward_scales"]
         self._create_scene(num_envs, show_viewer)
         self._init_buffers(self.device,self.num_envs)
-
-    def _create_scene(self, num_envs, show_viewer=False):
-        # create scene
-        self.scene = gs.Scene(
-            sim_options=gs.options.SimOptions(dt=self.dt, substeps=2),
-            viewer_options=gs.options.ViewerOptions(
-                max_FPS=int(0.5 / self.dt),
-                camera_pos=(2.0, 0.0, 2.5),
-                camera_lookat=(0.0, 0.0, 0.5),
-                camera_fov=40,
-            ),
-            vis_options=gs.options.VisOptions(n_rendered_envs=1),
-            rigid_options=gs.options.RigidOptions(
-                dt=self.dt,
-                constraint_solver=gs.constraint_solver.Newton,
-                enable_collision=True,
-                enable_joint_limit=True,
-            ),
-            show_viewer=show_viewer,
-        )
-        horizontal_scale = 0.25
-        vertical_scale = 0.005
-        # add plain
-        self.scene.add_entity(
-            morph=gs.morphs.Terrain(
-                n_subterrains=(2, 2),
-                horizontal_scale=horizontal_scale,
-                vertical_scale=vertical_scale,
-                subterrain_types=[
-                    ["flat_terrain", "random_uniform_terrain"],
-                    ["pyramid_sloped_terrain", "discrete_obstacles_terrain"],
-            ],            
-            ))
-
-        # add robot
-        self.base_init_pos = torch.tensor(self.env_cfg["base_init_pos"], device=self.device)
-        self.base_init_quat = torch.tensor(self.env_cfg["base_init_quat"], device=self.device)
-        self.inv_base_init_quat = inv_quat(self.base_init_quat)
-        self.robot = self.scene.add_entity(
-            gs.morphs.URDF(
-                file="urdf/go2/urdf/go2.urdf",
-                pos=self.base_init_pos.cpu().numpy(),
-                quat=self.base_init_quat.cpu().numpy(),
-            ),
-        )
-
-        # build
-        self.scene.build(n_envs=num_envs)
-
-        # names to indices
-        self.motor_dofs = [self.robot.get_joint(name).dof_idx_local for name in self.env_cfg["dof_names"]]
-
-        # PD control parameters
-        self.robot.set_dofs_kp([self.env_cfg["kp"]] * self.num_actions, self.motor_dofs)
-        self.robot.set_dofs_kv([self.env_cfg["kd"]] * self.num_actions, self.motor_dofs)
-
-    def _init_buffers(self,device,num_envs):
-        # prepare reward functions and multiply reward scales by dt
-        self.reward_functions, self.episode_sums = dict(), dict()
-        for name in self.reward_scales.keys():
-            self.reward_scales[name] *= self.dt
-            self.reward_functions[name] = getattr(self, "_reward_" + name)
-            self.episode_sums[name] = torch.zeros((num_envs,), device=device, dtype=gs.tc_float)
-
-        # initialize buffers
-        self.base_lin_vel = torch.zeros((num_envs, 3), device=device, dtype=gs.tc_float)
-        self.base_ang_vel = torch.zeros((num_envs, 3), device=device, dtype=gs.tc_float)
-        self.projected_gravity = torch.zeros((num_envs, 3), device=device, dtype=gs.tc_float)
-        self.global_gravity = torch.tensor([0.0, 0.0, -1.0], device=device, dtype=gs.tc_float).repeat(num_envs, 1)
-        self.obs_buf = {"policy":torch.zeros((num_envs, self.num_obs), device=device, dtype=gs.tc_float),}
-        self.rew_buf = torch.zeros((num_envs,), device=device, dtype=gs.tc_float)
-        self.reset_buf = torch.ones((num_envs,), device=device, dtype=gs.tc_int)
-        self.episode_length_buf = torch.zeros((num_envs,), device=device, dtype=gs.tc_int)
-        self.commands = torch.zeros((num_envs, self.num_commands), device=device, dtype=gs.tc_float)
-        self.commands_scale = torch.tensor([self.obs_scales["lin_vel"], self.obs_scales["lin_vel"], self.obs_scales["ang_vel"]],
-                                           device=device,dtype=gs.tc_float,)
-        self.actions = torch.zeros((num_envs, self.num_actions), device=device, dtype=gs.tc_float)
-        self.last_actions = torch.zeros_like(self.actions)
-        self.dof_pos = torch.zeros_like(self.actions)
-        self.dof_vel = torch.zeros_like(self.actions)
-        self.last_dof_vel = torch.zeros_like(self.actions)
-        self.base_pos = torch.zeros((num_envs, 3), device=device, dtype=gs.tc_float)
-        self.base_quat = torch.zeros((num_envs, 4), device=device, dtype=gs.tc_float)
-        self.default_dof_pos = torch.tensor([self.env_cfg["default_joint_angles"][name] for name in self.env_cfg["dof_names"]],
-                                            device=device,dtype=gs.tc_float,)
-        self.extras = dict()  # extra information for logging
-
-    def _resample_commands(self, envs_idx):
-        self.commands[envs_idx, 0] = gs_rand_float(*self.command_cfg["lin_vel_x_range"], (len(envs_idx),), self.device)
-        self.commands[envs_idx, 1] = gs_rand_float(*self.command_cfg["lin_vel_y_range"], (len(envs_idx),), self.device)
-        self.commands[envs_idx, 2] = gs_rand_float(*self.command_cfg["ang_vel_range"], (len(envs_idx),), self.device)
 
     def step(self, actions):
         self.actions = torch.clip(actions, -self.env_cfg["clip_actions"], self.env_cfg["clip_actions"])
@@ -244,6 +158,183 @@ class Go2BaseEnv:
         self.reset_idx(torch.arange(self.num_envs, device=self.device))
         return self.obs_buf, None
 
+    #------------- Callbacks --------------
+    def _create_scene(self, num_envs, show_viewer=True):
+        # create scene
+        self.scene = gs.Scene(
+            sim_options=gs.options.SimOptions(dt=self.dt, substeps=2),
+            viewer_options=gs.options.ViewerOptions(
+                max_FPS=int(0.5 / self.dt),
+                camera_pos=(2.0, 0.0, 2.5),
+                camera_lookat=(0.0, 0.0, 0.5),
+                camera_fov=40,
+            ),
+            vis_options=gs.options.VisOptions(n_rendered_envs=1),
+            rigid_options=gs.options.RigidOptions(
+                dt=self.dt,
+                constraint_solver=gs.constraint_solver.Newton,
+                enable_collision=True,
+                enable_joint_limit=True,
+            ),
+            show_viewer=show_viewer,
+        )
+        # add plain
+        self.terrain = self.scene.add_entity(
+            morph=gs.morphs.Terrain(
+                n_subterrains=(2, 2),
+                horizontal_scale=self.terriancfg['horizontal_scale'],
+                subterrain_size = self.terriancfg['subterrain_size'],
+                vertical_scale=self.terriancfg['vertical_scale'],
+                subterrain_types=[
+                    ["flat_terrain", "random_uniform_terrain"],
+                    ["pyramid_sloped_terrain", "discrete_obstacles_terrain"],
+            ],            
+            ))
+
+        # add robot
+        self.base_init_pos = torch.tensor(self.env_cfg["base_init_pos"], device=self.device)
+        self.base_init_quat = torch.tensor(self.env_cfg["base_init_quat"], device=self.device)
+        self.inv_base_init_quat = inv_quat(self.base_init_quat)
+        self.robot = self.scene.add_entity(
+            gs.morphs.URDF(
+                file="urdf/go2/urdf/go2.urdf",
+                pos=self.base_init_pos.cpu().numpy(),
+                quat=self.base_init_quat.cpu().numpy(),
+            ),
+        )
+
+        # build
+        self.scene.build(n_envs=num_envs)
+
+        # names to indices
+        self.motor_dofs = [self.robot.get_joint(name).dof_idx_local for name in self.env_cfg["dof_names"]]
+
+        # PD control parameters
+        self.robot.set_dofs_kp([self.env_cfg["kp"]] * self.num_actions, self.motor_dofs)
+        self.robot.set_dofs_kv([self.env_cfg["kd"]] * self.num_actions, self.motor_dofs)
+        
+        height_field = self.terrain.geoms[0].metadata["height_field"]
+
+    def _init_buffers(self,device,num_envs):
+        # prepare reward functions and multiply reward scales by dt
+        self.reward_functions, self.episode_sums = dict(), dict()
+        for name in self.reward_scales.keys():
+            self.reward_scales[name] *= self.dt
+            self.reward_functions[name] = getattr(self, "_reward_" + name)
+            self.episode_sums[name] = torch.zeros((num_envs,), device=device, dtype=gs.tc_float)
+
+        # initialize buffers
+        self.base_lin_vel = torch.zeros((num_envs, 3), device=device, dtype=gs.tc_float)
+        self.base_ang_vel = torch.zeros((num_envs, 3), device=device, dtype=gs.tc_float)
+        self.projected_gravity = torch.zeros((num_envs, 3), device=device, dtype=gs.tc_float)
+        self.global_gravity = torch.tensor([0.0, 0.0, -1.0], device=device, dtype=gs.tc_float).repeat(num_envs, 1)
+        self.obs_buf = {"policy":torch.zeros((num_envs, self.num_obs), device=device, dtype=gs.tc_float),}
+        self.rew_buf = torch.zeros((num_envs,), device=device, dtype=gs.tc_float)
+        self.reset_buf = torch.ones((num_envs,), device=device, dtype=gs.tc_int)
+        self.episode_length_buf = torch.zeros((num_envs,), device=device, dtype=gs.tc_int)
+        self.commands = torch.zeros((num_envs, self.num_commands), device=device, dtype=gs.tc_float)
+        self.commands_scale = torch.tensor([self.obs_scales["lin_vel"], self.obs_scales["lin_vel"], self.obs_scales["ang_vel"]],
+                                           device=device,dtype=gs.tc_float,)
+        self.actions = torch.zeros((num_envs, self.num_actions), device=device, dtype=gs.tc_float)
+        self.last_actions = torch.zeros_like(self.actions)
+        self.dof_pos = torch.zeros_like(self.actions)
+        self.dof_vel = torch.zeros_like(self.actions)
+        self.last_dof_vel = torch.zeros_like(self.actions)
+        self.base_pos = torch.zeros((num_envs, 3), device=device, dtype=gs.tc_float)
+        self.base_quat = torch.zeros((num_envs, 4), device=device, dtype=gs.tc_float)
+        self.default_dof_pos = torch.tensor([self.env_cfg["default_joint_angles"][name] for name in self.env_cfg["dof_names"]],
+                                            device=device,dtype=gs.tc_float,)
+        
+        self.base_height_points = self._init_base_height_points()# points at which the height measurments are sampled (in base frame)
+        self.height_samples = None
+        self.extras = dict()  # extra information for logging
+        
+    def _resample_commands(self, envs_idx):
+        self.commands[envs_idx, 0] = gs_rand_float(*self.command_cfg["lin_vel_x_range"], (len(envs_idx),), self.device)
+        self.commands[envs_idx, 1] = gs_rand_float(*self.command_cfg["lin_vel_y_range"], (len(envs_idx),), self.device)
+        self.commands[envs_idx, 2] = gs_rand_float(*self.command_cfg["ang_vel_range"], (len(envs_idx),), self.device)
+
+    def _init_base_height_points(self):
+        """ Returns points at which the height measurments are sampled (in base frame)
+
+        Returns:
+            [torch.Tensor]: Tensor of shape (num_envs, self.num_base_height_points, 3)
+        """
+        y = torch.tensor([-0.2, -0.15, -0.1, -0.05, 0., 0.05, 0.1, 0.15, 0.2], device=self.device, requires_grad=False)
+        x = torch.tensor([-0.15, -0.1, -0.05, 0., 0.05, 0.1, 0.15], device=self.device, requires_grad=False)
+        grid_x, grid_y = torch.meshgrid(x, y)
+
+        self.num_base_height_points = grid_x.numel()
+        points = torch.zeros(self.num_envs, self.num_base_height_points, 3, device=self.device, requires_grad=False)
+        points[:, :, 0] = grid_x.flatten()
+        points[:, :, 1] = grid_y.flatten()
+        return points
+
+    def _get_base_heights(self, env_ids=None):
+        """ Samples heights of the terrain at required points around each robot.
+            The points are offset by the base's position and rotated by the base's yaw
+
+        Args:
+            env_ids (List[int], optional): Subset of environments for which to return the heights. Defaults to None.
+
+        Raises:
+            NameError: [description]
+
+        Returns:
+            [type]: [description]
+        """
+        if self.terriancfg['mesh_type'] == 'plane':
+            return self.base_pos[:, 2].clone()
+        elif self.terriancfg['mesh_type'] == 'none':
+            raise NameError("Can't measure height with terrain mesh type 'none'")
+
+        if env_ids:
+            points = quat_apply_yaw(self.base_quat[env_ids].repeat(1, self.num_base_height_points), self.base_height_points[env_ids]) + (self.base_pos[env_ids, :3]).unsqueeze(1)
+        else:
+            points = quat_apply_yaw(self.base_quat.repeat(1, self.num_base_height_points), self.base_height_points) + (self.base_pos[:, :3]).unsqueeze(1)
+
+
+        points += self.terriancfg['border_size']
+        points = (points/self.terriancfg['horizontal_scale']).long()
+        px = points[:, :, 0].view(-1)
+        py = points[:, :, 1].view(-1)
+        px = torch.clip(px, 0, self.height_samples.shape[0]-2)
+        py = torch.clip(py, 0, self.height_samples.shape[1]-2)
+
+        heights1 = self.height_samples[px, py]
+        heights2 = self.height_samples[px+1, py]
+        heights3 = self.height_samples[px, py+1]
+        heights = torch.min(heights1, heights2)
+        heights = torch.min(heights, heights3)
+        # heights = (heights1 + heights2 + heights3) / 3
+
+        base_height =  heights.view(self.num_envs, -1) * self.terriancfg['vertical_scale']
+        base_height = torch.mean(self.base_pos[:, 2].unsqueeze(1) - base_height, dim=1)
+
+        return base_height
+
+    def _update_terrain_curriculum(self, env_ids):
+        """ Implements the game-inspired curriculum.
+
+        Args:
+            env_ids (List[int]): ids of environments being reset
+        """
+        # Implement Terrain curriculum
+        if not self.init_done:
+            # don't change on initial reset
+            return
+        distance = torch.norm(self.root_states[env_ids, :2] - self.env_origins[env_ids, :2], dim=1)
+        # robots that walked far enough progress to harder terains
+        move_up = distance > self.terrain.env_length / 2
+        # robots that walked less than half of their required distance go to simpler terrains
+        move_down = (distance < torch.norm(self.commands[env_ids, :2], dim=1)*self.max_episode_length_s*0.5) * ~move_up
+        self.terrain_levels[env_ids] += 1 * move_up - 1 * move_down
+        # Robots that solve the last level are sent to a random one
+        self.terrain_levels[env_ids] = torch.where(self.terrain_levels[env_ids]>=self.max_terrain_level,
+                                                   torch.randint_like(self.terrain_levels[env_ids], self.max_terrain_level),
+                                                   torch.clip(self.terrain_levels[env_ids], 0)) # (the minumum level is zero)
+        self.env_origins[env_ids] = self.terrain_origins[self.terrain_levels[env_ids], self.terrain_types[env_ids]]
+    
     # ------------ reward functions----------------
     def _reward_tracking_lin_vel(self):
         # Tracking of linear velocity commands (xy axes)
@@ -266,10 +357,6 @@ class Go2BaseEnv:
     def _reward_similar_to_default(self):
         # Penalize joint poses far away from default pose
         return torch.sum(torch.abs(self.dof_pos - self.default_dof_pos), dim=1)
-
-    def _reward_base_height(self):
-        # Penalize base height away from target
-        return torch.square(self.base_pos[:, 2] - self.reward_cfg["base_height_target"])
     
     def _reward_ang_vel_xy(self):
         # Penalize xy axes base angular velocity
@@ -290,7 +377,7 @@ class Go2BaseEnv:
     def _reward_base_height(self):
         # Penalize base height away from target
         base_height = self._get_base_heights()
-        return torch.square(base_height - self.cfg.rewards.base_height_target)
+        return torch.square(base_height - self.reward_cfg["base_height_target"])
     
     def _reward_smoothness(self):
         # second order smoothness
