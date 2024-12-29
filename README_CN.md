@@ -10,7 +10,9 @@
 [![GitHub Discussions](https://img.shields.io/github/discussions/Genesis-Embodied-AI/Genesis)](https://github.com/Genesis-Embodied-AI/Genesis/discussions)
 
 [![README in English](https://img.shields.io/badge/English-d9d9d9)](./README.md)
+[![README en Français](https://img.shields.io/badge/Francais-d9d9d9)](./README_FR.md)
 [![简体中文版自述文件](https://img.shields.io/badge/简体中文-d9d9d9)](./README_CN.md)
+[![日本語版 README](https://img.shields.io/badge/日本語-d9d9d9)](./README_JA.md)
 
 </div>
 
@@ -67,6 +69,26 @@ pip install genesis-world  # 需要 Python >=3.9
 ```
 
 同时需要按照[官方指南](https://pytorch.org/get-started/locally/)安装 PyTorch。
+
+### Docker 支持
+
+如果您想通过 Docker 使用 Genesis，您可以首先构建 Docker 镜像，命令如下：
+
+```bash
+docker build -t genesis -f docker/Dockerfile docker
+```
+
+然后，您可以在 Docker 镜像内运行示例代码（挂载到 `/workspace/examples`）：
+
+```bash
+xhost +local:root # 允许容器访问显示器
+
+docker run --gpus all --rm -it \
+-e DISPLAY=$DISPLAY \
+-v /tmp/.X11-unix/:/tmp/.X11-unix \
+-v $PWD:/workspace \
+genesis
+```
 
 ### 文档
 
