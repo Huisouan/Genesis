@@ -174,19 +174,23 @@ class Go2BaseEnv:
                 constraint_solver=gs.constraint_solver.Newton,
                 enable_collision=True,
                 enable_joint_limit=True,
+                
             ),
             show_viewer=show_viewer,
         )
+        
+        self.scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))        
+        
         # add plain
         self.terrain = self.scene.add_entity(
             morph=gs.morphs.Terrain(
-                n_subterrains=(2, 2),
+                
+                n_subterrains=(1,1),
                 horizontal_scale=self.terriancfg['horizontal_scale'],
                 subterrain_size = self.terriancfg['subterrain_size'],
                 vertical_scale=self.terriancfg['vertical_scale'],
                 subterrain_types=[
-                    ["flat_terrain", "random_uniform_terrain"],
-                    ["pyramid_sloped_terrain", "discrete_obstacles_terrain"],
+                    ["flat_terrain"]
             ],            
             ))
 
