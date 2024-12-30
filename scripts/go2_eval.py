@@ -7,7 +7,11 @@ from rl_lab.env import *
 from rsl_rl.runners import *
 from rsl_rl.utils.wrappers import RslRlVecEnvWrapper
 import genesis as gs
-
+from rsl_rl.utils.wrappers import (
+    RslRlOnPolicyRunnerCfg,
+    export_policy_as_jit,
+    export_policy_as_onnx,
+)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -37,9 +41,14 @@ def main():
     runner = runner_class(env, train_cfg, log_dir, device="cuda:0")
 
     resume_path = os.path.join(log_dir, f"model_{args.ckpt}.pt")
+
+
     runner.load(resume_path)
     policy = runner.get_inference_policy(device="cuda:0")
-
+    export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
+    export_policy_as_jit(
+        runner.alg.actor_critic, runner.obs_normalizer, path=export_model_dir, filename="policy.pt"
+    )
     obs, _ = env.reset()
     with torch.no_grad():
         while True:

@@ -331,7 +331,6 @@ def parse_terrain(morph: MultiScaleTerrain, surface):
         heightfield,
         horizontal_scale=morph.horizontal_scale,
         vertical_scale=morph.vertical_scale,
-        slope_threshold = 
     )
     vmesh = gs.Mesh.from_trimesh(mesh=tmesh, surface=surface)
     mesh = gs.Mesh.from_trimesh(

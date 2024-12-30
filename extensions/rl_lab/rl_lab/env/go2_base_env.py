@@ -178,21 +178,22 @@ class Go2BaseEnv:
             ),
             show_viewer=show_viewer,
         )
-        
-        self.scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))        
+        if self.terriancfg['flat_terrain'] :
+            self.terrain = self.scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))        
         
         # add plain
-        self.terrain = self.scene.add_entity(
-            morph=gs.morphs.Terrain(
-                
-                n_subterrains=(1,1),
-                horizontal_scale=self.terriancfg['horizontal_scale'],
-                subterrain_size = self.terriancfg['subterrain_size'],
-                vertical_scale=self.terriancfg['vertical_scale'],
-                subterrain_types=[
-                    ["flat_terrain"]
-            ],            
-            ))
+        else:
+            self.terrain = self.scene.add_entity(
+                morph=gs.morphs.Terrain(
+                    
+                    n_subterrains=(1,1),
+                    horizontal_scale=self.terriancfg['horizontal_scale'],
+                    subterrain_size = self.terriancfg['subterrain_size'],
+                    vertical_scale=self.terriancfg['vertical_scale'],
+                    subterrain_types=[
+                        ["flat_terrain","flat_terrain"]
+                ],            
+                ))
 
         # add robot
         self.base_init_pos = torch.tensor(self.env_cfg["base_init_pos"], device=self.device)
@@ -215,8 +216,8 @@ class Go2BaseEnv:
         # PD control parameters
         self.robot.set_dofs_kp([self.env_cfg["kp"]] * self.num_actions, self.motor_dofs)
         self.robot.set_dofs_kv([self.env_cfg["kd"]] * self.num_actions, self.motor_dofs)
-        
-        height_field = self.terrain.geoms[0].metadata["height_field"]
+        if not self.terriancfg['flat_terrain'] :
+            height_field = self.terrain.geoms[0].metadata["height_field"]
 
     def _init_buffers(self,device,num_envs):
         # prepare reward functions and multiply reward scales by dt
@@ -286,11 +287,8 @@ class Go2BaseEnv:
         Returns:
             [type]: [description]
         """
-        if self.terriancfg['mesh_type'] == 'plane':
+        if self.terriancfg['flat_terrain'] :
             return self.base_pos[:, 2].clone()
-        elif self.terriancfg['mesh_type'] == 'none':
-            raise NameError("Can't measure height with terrain mesh type 'none'")
-
         if env_ids:
             points = quat_apply_yaw(self.base_quat[env_ids].repeat(1, self.num_base_height_points), self.base_height_points[env_ids]) + (self.base_pos[env_ids, :3]).unsqueeze(1)
         else:

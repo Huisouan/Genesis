@@ -42,18 +42,7 @@ class EnvConfig:
         self.simulate_action_latency = True
         self.clip_actions = 100.0
         self.terraincfg = {
-            """
-                "flat_terrain",
-                "fractal_terrain",
-                "random_uniform_terrain",
-                "sloped_terrain",
-                "pyramid_sloped_terrain",
-                "discrete_obstacles_terrain",
-                "wave_terrain",
-                "stairs_terrain",
-                "pyramid_stairs_terrain",
-                "stepping_stones_terrain",
-            """
+            'flat_terrain' :True,
             'mesh_type': 'trimesh',  # "heightfield" # none, plane, heightfield or trimesh
             'horizontal_scale': 0.1,  # [m]
             'vertical_scale': 0.005,  # [m]
