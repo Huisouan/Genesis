@@ -39,7 +39,7 @@ def main():
         morph=MultiScaleTerrain(
             n_subterrains = (3, 10),
             subterrain_types=[
-                "flat_terrain", "pyramid_stairs_terrain", "stepping_stones_terrain"
+                "flat_terrain", "pyramid_stairs_terrain", "pyramid_sloped_terrain"
             ],
             curriculum = True,
         ),

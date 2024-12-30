@@ -331,6 +331,7 @@ def parse_terrain(morph: MultiScaleTerrain, surface):
         heightfield,
         horizontal_scale=morph.horizontal_scale,
         vertical_scale=morph.vertical_scale,
+        slope_threshold = 
     )
     vmesh = gs.Mesh.from_trimesh(mesh=tmesh, surface=surface)
     mesh = gs.Mesh.from_trimesh(
@@ -376,59 +377,68 @@ def fractal_terrain(terrain, levels=8, scale=1.0):
 
 def convert_heightfield_to_watertight_trimesh(height_field_raw, horizontal_scale, vertical_scale, slope_threshold=None):
     """
-    Adapted from Issac Gym's `convert_heightfield_to_trimesh` function.
-    Convert a heightfield array to a triangle mesh represented by vertices and triangles.
-    Optionally, corrects vertical surfaces above the provide slope threshold:
+    将高度场数组转换为由顶点和三角形表示的三角网格。
+    可选地，修正超过给定斜率阈值的垂直表面。
 
-        If (y2-y1)/(x2-x1) > slope_threshold -> Move A to A' (set x1 = x2). Do this for all directions.
-                   B(x2,y2)
-                  /|
-                 / |
-                /  |
-        (x1,y1)A---A'(x2',y1)
+    参数:
+        height_field_raw (np.array): 输入的高度场数组
+        horizontal_scale (float): 高度场的水平比例尺 [米]
+        vertical_scale (float): 高度场的垂直比例尺 [米]
+        slope_threshold (float): 斜率阈值，超过该阈值的表面将被修正为垂直。如果为 None，则不进行修正 (默认: None)
 
-    Parameters:
-        height_field_raw (np.array): input heightfield
-        horizontal_scale (float): horizontal scale of the heightfield [meters]
-        vertical_scale (float): vertical scale of the heightfield [meters]
-        slope_threshold (float): the slope threshold above which surfaces are made vertical. If None no correction is applied (default: None)
-    Returns:
-        vertices (np.array(float)): array of shape (num_vertices, 3). Each row represents the location of each vertex [meters]
-        triangles (np.array(int)): array of shape (num_triangles, 3). Each row represents the indices of the 3 vertices connected by this triangle.
+    返回:
+        vertices (np.array(float)): 形状为 (num_vertices, 3) 的数组，每一行表示每个顶点的位置 [米]
+        triangles (np.array(int)): 形状为 (num_triangles, 3) 的数组，每一行表示连接三个顶点的三角形的索引
     """
+
+    # 获取高度场的行数和列数
     hf = height_field_raw
     num_rows = hf.shape[0]
     num_cols = hf.shape[1]
 
+    # 创建 x 和 y 坐标网格
     y = np.linspace(0, (num_cols - 1) * horizontal_scale, num_cols)
     x = np.linspace(0, (num_rows - 1) * horizontal_scale, num_rows)
     yy, xx = np.meshgrid(y, x)
 
+    # 如果提供了斜率阈值，则进行修正
     if slope_threshold is not None:
-        assert False  # our sdf representation doesn't support steep slopes well
+        assert False  # 当前的 SDF 表示法不支持陡峭斜坡
 
+        # 调整斜率阈值以适应比例尺
         slope_threshold *= horizontal_scale / vertical_scale
+        
+        # 计算需要移动的顶点
         move_x = np.zeros((num_rows, num_cols))
         move_y = np.zeros((num_rows, num_cols))
         move_corners = np.zeros((num_rows, num_cols))
+        
+        # 计算 x 方向的移动
         move_x[: num_rows - 1, :] += hf[1:num_rows, :] - hf[: num_rows - 1, :] > slope_threshold
         move_x[1:num_rows, :] -= hf[: num_rows - 1, :] - hf[1:num_rows, :] > slope_threshold
+        
+        # 计算 y 方向的移动
         move_y[:, : num_cols - 1] += hf[:, 1:num_cols] - hf[:, : num_cols - 1] > slope_threshold
         move_y[:, 1:num_cols] -= hf[:, : num_cols - 1] - hf[:, 1:num_cols] > slope_threshold
+        
+        # 计算角落的移动
         move_corners[: num_rows - 1, : num_cols - 1] += (
             hf[1:num_rows, 1:num_cols] - hf[: num_rows - 1, : num_cols - 1] > slope_threshold
         )
         move_corners[1:num_rows, 1:num_cols] -= (
             hf[: num_rows - 1, : num_cols - 1] - hf[1:num_rows, 1:num_cols] > slope_threshold
         )
+        
+        # 更新 x 和 y 坐标
         xx += (move_x + move_corners * (move_x == 0)) * horizontal_scale
         yy += (move_y + move_corners * (move_y == 0)) * horizontal_scale
 
-    # create triangle mesh vertices and triangles from the heightfield grid
+    # 创建顶部平面的顶点和三角形
     vertices_top = np.zeros((num_rows * num_cols, 3), dtype=np.float32)
     vertices_top[:, 0] = xx.flatten()
     vertices_top[:, 1] = yy.flatten()
     vertices_top[:, 2] = hf.flatten() * vertical_scale
+    
     triangles_top = -np.ones((2 * (num_rows - 1) * (num_cols - 1), 3), dtype=np.uint32)
     for i in range(num_rows - 1):
         ind0 = np.arange(0, num_cols - 1) + i * num_cols
@@ -444,13 +454,14 @@ def convert_heightfield_to_watertight_trimesh(height_field_raw, horizontal_scale
         triangles_top[start + 1 : stop : 2, 1] = ind2
         triangles_top[start + 1 : stop : 2, 2] = ind3
 
-    # bottom plane
+    # 创建底部平面的顶点和三角形
     z_min = np.min(vertices_top[:, 2]) - 1.0
 
     vertices_bottom = np.zeros((num_rows * num_cols, 3), dtype=np.float32)
     vertices_bottom[:, 0] = xx.flatten()
     vertices_bottom[:, 1] = yy.flatten()
     vertices_bottom[:, 2] = z_min
+    
     triangles_bottom = -np.ones((2 * (num_rows - 1) * (num_cols - 1), 3), dtype=np.uint32)
     for i in range(num_rows - 1):
         ind0 = np.arange(0, num_cols - 1) + i * num_cols
@@ -467,7 +478,7 @@ def convert_heightfield_to_watertight_trimesh(height_field_raw, horizontal_scale
         triangles_bottom[start + 1 : stop : 2, 1] = ind3
     triangles_bottom += num_rows * num_cols
 
-    # side face
+    # 创建侧面的三角形
     triangles_side_0 = np.zeros([2 * (num_rows - 1), 3], dtype=np.uint32)
     for i in range(num_rows - 1):
         ind0 = i * num_cols
@@ -504,15 +515,17 @@ def convert_heightfield_to_watertight_trimesh(height_field_raw, horizontal_scale
         triangles_side_3[2 * i] = [ind0, ind2, ind1]
         triangles_side_3[2 * i + 1] = [ind1, ind2, ind3]
 
+    # 合并所有顶点和三角形
     vertices = np.concatenate([vertices_top, vertices_bottom], axis=0)
     triangles = np.concatenate(
         [triangles_top, triangles_bottom, triangles_side_0, triangles_side_1, triangles_side_2, triangles_side_3],
         axis=0,
     )
 
-    # This a uniformly-distributed full mesh, which gives faster sdf generation
+    # 创建一个均匀分布的完整网格，用于更快的 SDF 生成
     sdf_mesh = trimesh.Trimesh(vertices, triangles, process=False)
-    # This is the mesh used for non-sdf purposes. It's losslessly simplified from the full mesh, to save memory cost for storing verts and faces
+    
+    # 创建一个简化后的网格，用于非 SDF 目的，以节省内存
     mesh = sdf_mesh.simplify_quadric_decimation(face_count=0, maximum_error=0.0)
 
     return mesh, sdf_mesh
