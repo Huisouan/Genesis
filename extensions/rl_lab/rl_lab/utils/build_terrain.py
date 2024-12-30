@@ -93,7 +93,32 @@ class MultiScaleTerrain(gs.morphs.Morph):
                 gs.raise_exception("`height_field` should be array-like to be converted to np.ndarray.")
 
             return
-        if self.curriculum == False:
+        
+        if self.curriculum:
+            if isinstance(self.subterrain_types, str):
+                subterrain_types = []
+                for i in range(self.n_subterrains[0]):
+                    row = []
+                    for j in range(self.n_subterrains[1]):
+                        row.append(self.subterrain_types)
+                    subterrain_types.append(row)
+                self.subterrain_types = subterrain_types
+            elif isinstance(self.subterrain_types, list):
+                # 将一维列表转换为二维列表
+                subterrain_types = []
+                for i in range(self.n_subterrains[0]):
+                    row = []
+                    for j in range(self.n_subterrains[1]):
+                        row.append(self.subterrain_types[i])
+                    subterrain_types.append(row)
+                self.subterrain_types = subterrain_types
+            else:
+                if np.array(self.subterrain_types).shape != (self.n_subterrains[0], self.n_subterrains[1]):
+                    gs.raise_exception(
+                        "`subterrain_types` should be either a string or a 2D list of strings with the same shape as `n_subterrains`."
+                    )
+        else:
+            # curriculum == False 的逻辑保持不变
             if isinstance(self.subterrain_types, str):
                 subterrain_types = []
                 for i in range(self.n_subterrains[0]):
@@ -107,7 +132,7 @@ class MultiScaleTerrain(gs.morphs.Morph):
                     gs.raise_exception(
                         "`subterrain_types` should be either a string or a 2D list of strings with the same shape as `n_subterrains`."
                     )
-
+                
         for row in self.subterrain_types:
             for subterrain_type in row:
                 if subterrain_type not in supported_subterrain_types:
