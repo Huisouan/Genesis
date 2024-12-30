@@ -3,17 +3,17 @@ import pandas as pd
 import os
 
 from unitree_bridge.process.base import UnitreeBase
-from unitree_bridge.config.algo.algocfg import HIMConfig
+from unitree_bridge.config.algo.algocfg import A2CConfig
 from unitree_bridge.config.robot.bot_cfg import GO2
 from unitree_bridge.config.env import quat_rotate_inverse, GRAVITY_VEC
 
-class Himloco(UnitreeBase):
-    def __init__(self, Algocfg: HIMConfig, Botcfg: GO2):
+class A2C(UnitreeBase):
+    def __init__(self, Algocfg: A2CConfig, Botcfg: GO2):
         super().__init__(Algocfg, Botcfg)
         self.base_ang_vel_scale = Algocfg.base_ang_vel_scale
         self.joint_pos_scale = Algocfg.joint_pos_scale
         self.joint_vel_scale = Algocfg.joint_vel_scale
-        self.actions_joint_pos_scale = Algocfg.actions_joint_pos_scale
+        self.actions_scale = Algocfg.actions_scale
         self.reset_action = False
         # 创建目录用于保存数据
         self.data_dir = "recorddata"
@@ -39,7 +39,7 @@ class Himloco(UnitreeBase):
         single_obs = torch.cat([base_ang_vel, projected_gravity, velocity_commands, joint_pos, joint_vel, self.algo_act], dim=-1)
         
         # 拼接 single_obs 到 obs 的前面
-        self.algo_obs = torch.cat((single_obs, self.algo_obs[:-45]), dim=-1)
+        self.algo_obs = single_obs
         
         # 记录 algo_obs 数据
         self.record_algo_obs(single_obs)
@@ -57,14 +57,12 @@ class Himloco(UnitreeBase):
             if self.reset_action:
                 self.algo_act = torch.zeros_like(self.algo_act)            
             # 输出缩放
-            bot_act = self.algo_act * self.actions_joint_pos_scale + self.default_jointpos_bias
+            bot_act = self.algo_act * self.actions_scale + self.default_jointpos_bias
 
             action_up_limit = (45+Kd*joint_vel) / Kp
             action_down_limit = (-45+Kd*joint_vel) / Kp
 
             bot_act = torch.clamp(bot_act, action_down_limit, action_up_limit)
-
-            bot_act = self.joint_reorder(bot_act, self.sim2bot_joint_order)
 
             bot_act = bot_act.cpu().detach().numpy()
             return bot_act
@@ -93,26 +91,3 @@ class Himloco(UnitreeBase):
         else:
             df.to_csv(self.record_file_path, mode='a', header=False, index=False)
 
-class Himloco_gym(Himloco):
-    def __init__(self, Algocfg: HIMConfig, Botcfg: GO2):
-        super().__init__(Algocfg, Botcfg)
-        
-    def prepare_obs(self, base_ang_vel, projected_gravity, velocity_commands, joint_pos, joint_vel):
-        """函数输入从机器人数据中预处理得到的数据
-            对数据进行缩放操作
-            并将数据整合到self.obs中
-        """ 
-        base_ang_vel *= self.base_ang_vel_scale
-        # 将joint_pos减去默认关节位置偏移量
-        joint_pos = (joint_pos - self.default_jointpos_bias)*self.joint_pos_scale
-        
-        joint_vel *= self.joint_vel_scale
-        
-        # 拼接所有输入张量
-        single_obs = torch.cat([velocity_commands,base_ang_vel, projected_gravity, joint_pos, joint_vel, self.algo_act], dim=-1)
-        
-        # 拼接 single_obs 到 obs 的前面
-        self.algo_obs = torch.cat((single_obs, self.algo_obs[:-45]), dim=-1)
-        
-        # 记录 algo_obs 数据
-        self.record_algo_obs(single_obs)

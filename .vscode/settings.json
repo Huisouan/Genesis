@@ -3,7 +3,12 @@
     "python.analysis.extraPaths": [
         "${workspaceFolder}/extensions/rsl_rl", // 添加 rsl_rl 模块路径
         "${workspaceFolder}/extensions/rl_lab",  // 添加 rl_lab 模块路径
+        "${workspaceFolder}/extensions/unitree_s2r",
+        "${workspaceFolder}/extensions/unitree_sdk2_python",
+        "${workspaceFolder}/extensions/inference_bridge",
         "${workspaceFolder}/genesis",  // 添加 rl_lab_2d 模块路径
+
+        
     ],
     "ros.distro": "jazzy",
     "MicroPython.executeButton": [

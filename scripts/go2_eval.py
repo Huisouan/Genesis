@@ -45,7 +45,7 @@ def main():
 
     runner.load(resume_path)
     policy = runner.get_inference_policy(device="cuda:0")
-    export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
+    export_model_dir = f"weights/{args.exp_name}"
     export_policy_as_jit(
         runner.alg.actor_critic, runner.obs_normalizer, path=export_model_dir, filename="policy.pt"
     )
