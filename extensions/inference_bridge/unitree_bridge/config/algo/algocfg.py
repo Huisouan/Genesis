@@ -12,9 +12,9 @@ class Algo_def_cfg:
 class A2CConfig(Algo_def_cfg):
     model_path = "weights/Go2ActorCritic/policy.pt"
     
-    policy_observation_dim = None
+    policy_observation_dim = 45
 
-    policy_action_dim = None
+    policy_action_dim = 12
 
     joint_order = (
     "FR_hip",   # hip

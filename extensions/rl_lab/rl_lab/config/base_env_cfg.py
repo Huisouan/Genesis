@@ -95,9 +95,9 @@ class RewardConfig:
 class CommandConfig:
     def __init__(self):
         self.num_commands = 3
-        self.lin_vel_x_range = [0.5, 0.5]
-        self.lin_vel_y_range = [0, 0]
-        self.ang_vel_range = [0, 0]
+        self.lin_vel_x_range = [-1, 1]
+        self.lin_vel_y_range = [-1, 1]
+        self.ang_vel_range = [-3.14, 3.14]
 
 class BaseEnvCfg:
     def __init__(self):
