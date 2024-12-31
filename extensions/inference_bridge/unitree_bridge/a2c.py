@@ -15,6 +15,7 @@ class A2C(UnitreeBase):
         self.joint_vel_scale = Algocfg.joint_vel_scale
         self.actions_scale = Algocfg.actions_scale
         self.reset_action = False
+        self.last_action = None
         # 创建目录用于保存数据
         self.data_dir = "recorddata"
         if not os.path.exists(self.data_dir):
