@@ -52,8 +52,8 @@ class _TorchPolicyExporter(torch.nn.Module):
         cloned_actor_critic = copy.deepcopy(actor_critic)
         # 保存 actor_critic 的 forward 方法
         
-        if hasattr(cloned_actor_critic, 'forward'):
-            self.forward = cloned_actor_critic.forward
+        if hasattr(cloned_actor_critic, 'act_inference'):
+            self.forward = cloned_actor_critic.act_inference
         else:
             raise AttributeError("'actor_critic' object has no 'forward' method")
         # 复制所有 nn.Module 类型的子模块

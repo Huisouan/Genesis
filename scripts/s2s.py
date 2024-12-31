@@ -34,6 +34,10 @@ def main(go2:Go2_SIM2SIM):
     Botcfg = GO2
     model = A2C(Algocfg, Botcfg)
     target_interval = 0.02
+    
+    go2.Kp = Botcfg.kp
+    go2.Kd = Botcfg.kd
+    
     while True:
         start_time = time.time()  # 记录循环开始时间
 
@@ -52,15 +56,14 @@ def main(go2:Go2_SIM2SIM):
 
         action = model.forward(imu_state, motor_state, velocity_commands,go2.Kp,go2.Kd)
 
-        
+        # 赋值
+        #print(action)
+        go2.extent_targetPos = action
         end_time = time.time()  # 记录循环结束时间
         elapsed_time = end_time - start_time  # 计算实际花费的时间
 
         sleep_time = max(0, target_interval - elapsed_time)  # 计算需要睡眠的时间
         time.sleep(sleep_time)  # 休眠
-        # 赋值
-        #print(action)
-        go2.extent_targetPos = action
 
 if __name__ == "__main__":
     ChannelFactoryInitialize(1, default_network)
@@ -69,7 +72,7 @@ if __name__ == "__main__":
     go2 = Go2_SIM2SIM()
     # 启动Go2_SIM2SIM对象
     go2.Start()
-    
+     
 
 
     main(go2)

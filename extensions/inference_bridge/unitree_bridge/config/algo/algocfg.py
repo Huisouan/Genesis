@@ -33,12 +33,12 @@ class A2CConfig(Algo_def_cfg):
     
     default_jointpos_bias = [
         0.0,0.8,-1.5,
-        0.0,0.8,1.5,
-        0.0,1.0,1.5,
-        0.0,1.0,1.5,
+        0.0,0.8,-1.5,
+        0.0,1.0,-1.5,
+        0.0,1.0,-1.5,
     ]    
     
-    base_ang_vel_scale = 0.25
+    base_ang_vel_scale = 0.1
     joint_pos_scale = 1.0
     joint_vel_scale = 0.05
     actions_scale = 0.25

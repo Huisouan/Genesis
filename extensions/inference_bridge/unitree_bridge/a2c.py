@@ -1,7 +1,7 @@
 import torch
 import pandas as pd
 import os
-
+from genesis.utils.geom import quat_to_xyz, transform_by_quat, inv_quat, transform_quat_by_quat
 from unitree_bridge.process.base import UnitreeBase
 from unitree_bridge.config.algo.algocfg import A2CConfig
 from unitree_bridge.config.robot.bot_cfg import GO2
@@ -29,15 +29,19 @@ class A2C(UnitreeBase):
         """函数输入从机器人数据中预处理得到的数据
             对数据进行缩放操作
             并将数据整合到self.obs中
-        """ 
-        base_ang_vel *= self.base_ang_vel_scale
-        # 将joint_pos减去默认关节位置偏移量
-        joint_pos = (joint_pos - self.default_jointpos_bias)*self.joint_pos_scale
-        
-        joint_vel *= self.joint_vel_scale
-        
+        """  
         # 拼接所有输入张量
-        single_obs = torch.cat([base_ang_vel, projected_gravity, velocity_commands, joint_pos, joint_vel, self.algo_act], dim=-1)
+        single_obs = torch.cat(
+            [
+                base_ang_vel*self.base_ang_vel_scale, 
+                projected_gravity[0], 
+                velocity_commands, 
+                (joint_pos - self.default_jointpos_bias)*self.joint_pos_scale, 
+                joint_vel*self.joint_vel_scale, 
+                self.algo_act
+             ], 
+            axis=-1,
+        )
         
         # 拼接 single_obs 到 obs 的前面
         self.algo_obs = single_obs
@@ -48,7 +52,8 @@ class A2C(UnitreeBase):
         with torch.inference_mode():
             # 数据预处理
             gyroscope, quaternion, joint_pos, joint_vel = self.data_process(imu_data, motor_state)
-            projected_gravity = quat_rotate_inverse(quaternion, GRAVITY_VEC)
+            inv_base_quat = inv_quat(quaternion)
+            projected_gravity = transform_by_quat(GRAVITY_VEC, inv_base_quat)
             # 观测值缩放
             velocity_command = torch.tensor(velocity_commands, device=self.device)
             
@@ -59,12 +64,6 @@ class A2C(UnitreeBase):
                 self.algo_act = torch.zeros_like(self.algo_act)            
             # 输出缩放
             bot_act = self.algo_act * self.actions_scale + self.default_jointpos_bias
-
-            action_up_limit = (45+Kd*joint_vel) / Kp
-            action_down_limit = (-45+Kd*joint_vel) / Kp
-
-            bot_act = torch.clamp(bot_act, action_down_limit, action_up_limit)
-
             bot_act = bot_act.cpu().detach().numpy()
             return bot_act
     def record_algo_obs(self, single_obs):

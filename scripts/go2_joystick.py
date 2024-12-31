@@ -7,6 +7,7 @@ from rl_lab.env import *
 from rsl_rl.runners import *
 from rsl_rl.utils.wrappers import RslRlVecEnvWrapper
 import genesis as gs
+from unitree_bridge.process.joystick import *
 from rsl_rl.utils.wrappers import (
     RslRlOnPolicyRunnerCfg,
     export_policy_as_jit,
@@ -46,16 +47,15 @@ def main():
     runner.load(resume_path)
     policy = runner.get_inference_policy(device="cuda:0")
     export_model_dir = f"weights/{args.exp_name}"
-    export_policy_as_jit(
-        runner.alg.actor_critic, runner.obs_normalizer, path=export_model_dir, filename="policy.pt"
-    )
+    init_pygame()
+    joystick = init_joystick()
     obs, _ = env.reset()
     with torch.no_grad():
         while True:
             actions = policy(obs)
             obs, rews, dones, infos = env.step(actions)
-            
-
+            velocity_commands, button_pressed = get_joystick_state(joystick)
+            obs[:,6:9] = torch.tensor(velocity_commands).to(obs.device)
 if __name__ == "__main__":
     main()
 
