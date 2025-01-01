@@ -42,6 +42,10 @@ Genesis is a physics platform designed for general-purpose *Robotics/Embodied AI
 3. A powerful and fast **photo-realistic rendering system**.
 4. A **generative data engine** that transforms user-prompted natural language description into various modalities of data.
 
+Powered by a universal physics engine re-designed and re-built from the ground up, Genesis integrates various physics solvers and their coupling into a unified framework. This core physics engine is further enhanced by a generative agent framework that operates at an upper level, aiming towards fully automated data generation for robotics and beyond.
+
+**Note**: Currently, we are open-sourcing the _underlying physics engine_ and the _simulation platform_. Our _generative framework_ is a modular system that incorporates many different generative modules, each handling a certain range of data modalities, routed by a high level agent. Some of the modules integrated existing papers and some are still under submission. Access to our generative feature will be gradually rolled out in the near future. If you are interested, feel free to explore more in the [paper list](#associated-papers) below.
+
 Genesis aims to:
 
 - **Lower the barrier** to using physics simulations, making robotics research accessible to everyone. See our [mission statement](https://genesis-world.readthedocs.io/en/latest/user_guide/overview/mission.html).
@@ -101,7 +105,7 @@ genesis
 
 ## Documentation
 
-Comprehensive documentation is available in [English](https://genesis-world.readthedocs.io/en/latest/user_guide/index.html) and [Chinese](https://genesis-world.readthedocs.io/zh-cn/latest/user_guide/index.html). This includes detailed installation steps, tutorials, and API references.
+Comprehensive documentation is available in [English](https://genesis-world.readthedocs.io/en/latest/user_guide/index.html), [Chinese](https://genesis-world.readthedocs.io/zh-cn/latest/user_guide/index.html), and [Japanese](https://genesis-world.readthedocs.io/ja/latest/user_guide/index.html). This includes detailed installation steps, tutorials, and API references.
 
 ## Contributing to Genesis
 
