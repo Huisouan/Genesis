@@ -1,6 +1,10 @@
+#!/usr/bin/env python3
 import argparse
 import numpy as np
 import genesis as gs
+import torch
+import plotly.express as px  # 导入plotly.express
+import plotly.graph_objects as go  # 导入plotly.graph_objects
 
 def main():
     parser = argparse.ArgumentParser()
@@ -76,11 +80,11 @@ def main():
 
     ########################## build ##########################
     scene.build()
-    import IPython; IPython.embed()
     motor_dofs = [robot.get_joint(name).dof_idx_local for name in dof_names]
+    joints = []
+    data = torch.zeros(100, 18)  # 修改为正确的初始化方式
+    for i in range(100):
 
-    while True:
-        joints = robot.get_joint()
         AABB = robot.get_AABB()
         ang = robot.get_ang()
         contacts = robot.get_contacts()
@@ -88,11 +92,29 @@ def main():
         dofs_control_force = robot.get_dofs_control_force()
         dofs_damping = robot.get_dofs_damping()
         dofs_force = robot.get_dofs_force()
-        
+        data[i] = dofs_force
         
         scene.step()
+    
+    # 可视化 data 中的数据，使用plotly绘制所有列
+    time_steps = np.arange(500)
+    fig = go.Figure()
 
+    for i in range(data.shape[1]):
+        fig.add_trace(go.Scatter(x=time_steps, y=data[:, i], mode='lines', name=f'DOF {i}'))
 
+    fig.update_layout(
+        title='DOF Forces Over Time',
+        xaxis_title='Time Step',
+        yaxis_title='Force',
+        legend_title='DOF',
+        width=1200,
+        height=800
+    )
+
+    fig.show()
+
+    print("Done")
 
 if __name__ == "__main__":
     main()

@@ -377,7 +377,7 @@ class Go2BaseEnv:
     
     def _reward_joint_power(self):
         #Penalize high power
-        return torch.sum(torch.abs(self.dof_vel) * torch.abs(self.torques), dim=1)
+        return torch.sum(torch.abs(self.dof_vel) * torch.abs(self.control_force), dim=1)
 
     def _reward_base_height(self):
         # Penalize base height away from target
@@ -416,8 +416,8 @@ class Go2BaseEnv:
         return torch.sum((torch.abs(self.dof_vel) - self.dof_vel_limits*self.cfg.rewards.soft_dof_vel_limit).clip(min=0., max=1.), dim=1)
 
     def _reward_torque_limits(self):
-        # penalize torques too close to the limit
-        return torch.sum((torch.abs(self.torques) - self.torque_limits*self.cfg.rewards.soft_torque_limit).clip(min=0.), dim=1)
+        # penalize control_force too close to the limit
+        return torch.sum((torch.abs(self.control_force) - self.torque_limits*self.cfg.rewards.soft_torque_limit).clip(min=0.), dim=1)
 
     def _reward_feet_air_time(self):
         # Reward long steps
