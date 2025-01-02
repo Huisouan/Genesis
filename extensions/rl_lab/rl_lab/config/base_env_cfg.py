@@ -69,7 +69,10 @@ class EnvConfig:
 class ObsConfig:
     def __init__(self):
         self.num_obs = 45
+        #默认critic观测数
+        self.num_privileged_obs = 0
         self.use_privileged_obs = False
+        
         self.obs_scales = {
             "lin_vel": 2.0,
             "ang_vel": 0.25,

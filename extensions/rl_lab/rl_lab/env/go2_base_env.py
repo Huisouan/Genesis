@@ -216,7 +216,7 @@ class Go2BaseEnv:
         # PD control parameters
         self.robot.set_dofs_kp([self.env_cfg["kp"]] * self.num_actions, self.motor_dofs)
         self.robot.set_dofs_kv([self.env_cfg["kd"]] * self.num_actions, self.motor_dofs)
-        
+
         if not self.terriancfg['flat_terrain'] :
             height_field = self.terrain.geoms[0].metadata["height_field"]
 
