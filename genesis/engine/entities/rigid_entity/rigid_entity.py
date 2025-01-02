@@ -629,17 +629,17 @@ class RigidEntity(Entity):
     @gs.assert_built
     def get_jacobian(self, link):
         """
-        Get the Jacobian matrix for a target link.
+        获取目标链接的雅可比矩阵。
 
-        Parameters
-        ----------
+        参数
+        ----
         link : RigidLink
-            The target link.
+            目标链接。
 
-        Returns
-        -------
+        返回
+        ----
         jacobian : torch.Tensor
-            The Jacobian matrix of shape (n_envs, 6, entity.n_dofs) or (6, entity.n_dofs) if n_envs == 0.
+            雅可比矩阵，形状为 (n_envs, 6, entity.n_dofs) 或 (6, entity.n_dofs) 如果 n_envs == 0。
         """
         if not self._requires_jac_and_IK:
             gs.raise_exception(
@@ -1218,31 +1218,31 @@ class RigidEntity(Entity):
         planner="RRTConnect",
     ):
         """
-        Plan a path from `qpos_start` to `qpos_goal`.
+        从 `qpos_start` 规划一条路径到 `qpos_goal`。
 
-        Parameters
-        ----------
+        参数
+        ----
         qpos_goal : array_like
-            The goal state.
-        qpos_start : None | array_like, optional
-            The start state. If None, the current state of the rigid entity will be used. Defaults to None.
-        timeout : float, optional
-            The maximum time (in seconds) allowed for the motion planning algorithm to find a solution. Defaults to 5.0.
-        smooth_path : bool, optional
-            Whether to smooth the path after finding a solution. Defaults to True.
-        num_waypoints : int, optional
-            The number of waypoints to interpolate the path. If None, no interpolation will be performed. Defaults to 100.
-        ignore_collision : bool, optional
-            Whether to ignore collision checking during motion planning. Defaults to False.
-        ignore_joint_limit : bool, optional
-            Whether to ignore joint limits during motion planning. Defaults to False.
-        planner : str, optional
-            The name of the motion planning algorithm to use. Supported planners: 'PRM', 'RRT', 'RRTConnect', 'RRTstar', 'EST', 'FMT', 'BITstar', 'ABITstar'. Defaults to 'RRTConnect'.
+            目标状态。
+        qpos_start : None | array_like, 可选
+            起始状态。如果为 None，则使用刚体实体的当前状态。默认为 None。
+        timeout : float, 可选
+            运动规划算法寻找解决方案的最大时间（秒）。默认为 5.0。
+        smooth_path : bool, 可选
+            是否在找到解决方案后平滑路径。默认为 True。
+        num_waypoints : int, 可选
+            插值路径的路点数量。如果为 None，则不进行插值。默认为 100。
+        ignore_collision : bool, 可选
+            是否在运动规划过程中忽略碰撞检测。默认为 False。
+        ignore_joint_limit : bool, 可选
+            是否在运动规划过程中忽略关节限制。默认为 False。
+        planner : str, 可选
+            要使用的运动规划算法名称。支持的规划器：'PRM', 'RRT', 'RRTConnect', 'RRTstar', 'EST', 'FMT', 'BITstar', 'ABITstar'。默认为 'RRTConnect'。
 
-        Returns
-        -------
+        返回
+        ----
         waypoints : list
-            A list of waypoints representing the planned path. Each waypoint is an array storing the entity's qpos of a single time step.
+            代表规划路径的路点列表。每个路点是一个数组，存储实体在单个时间步的 qpos。
         """
 
         ########## validate ##########
@@ -1397,7 +1397,35 @@ class RigidEntity(Entity):
         joint : RigidJoint
             The joint object.
         """
+        """
+        通过名称或 ID 获取 RigidJoint 对象。
 
+        参数
+        ----
+        name : str, 可选
+            关节的名称。默认为 None。
+        id : str, 可选
+            关节的 ID。这可以是关节 ID 的子字符串。默认为 None。
+
+        返回
+        ----
+        joint : RigidJoint
+            关节对象。
+        """"""
+        通过名称或 ID 获取 RigidJoint 对象。
+
+        参数
+        ----
+        name : str, 可选
+            关节的名称。默认为 None。
+        id : str, 可选
+            关节的 ID。这可以是关节 ID 的子字符串。默认为 None。
+
+        返回
+        ----
+        joint : RigidJoint
+            关节对象。
+        """
         if name is not None:
             for joint in self._joints:
                 if joint.name == name:
@@ -1429,7 +1457,21 @@ class RigidEntity(Entity):
         link : RigidLink
             The link object.
         """
+        """
+        通过名称或 ID 获取 RigidLink 对象。
 
+        参数
+        ----
+        name : str, 可选
+            链接的名称。默认为 None。
+        id : str, 可选
+            链接的 ID。这可以是链接 ID 的子字符串。默认为 None。
+
+        返回
+        ----
+        link : RigidLink
+            链接对象。
+        """
         if name is not None:
             for link in self._links:
                 if link.name == name:
@@ -1527,6 +1569,19 @@ class RigidEntity(Entity):
         -------
         pos : torch.Tensor, shape (n_links, 3) or (n_envs, n_links, 3)
             The position of all the entity's links.
+        """
+        """
+        返回实体所有链接的位置。
+
+        参数
+        ----
+        envs_idx : None | array_like, 可选
+            环境的索引。如果为 None，则考虑所有环境。默认为 None。
+
+        返回
+        ----
+        pos : torch.Tensor, 形状 (n_links, 3) 或 (n_envs, n_links, 3)
+            实体所有链接的位置。
         """
         return self._solver.get_links_pos(np.arange(self.link_start, self.link_end), envs_idx)
 
@@ -1687,6 +1742,14 @@ class RigidEntity(Entity):
         -------
         AABB : torch.Tensor, shape (2, 3) or (n_envs, 2, 3)
             The axis-aligned bounding box (AABB) of the entity (using collision geoms).
+        """
+        """
+        获取实体的轴对齐包围盒（AABB）（使用碰撞几何体）。
+
+        返回
+        ----
+        AABB : torch.Tensor, 形状 (2, 3) 或 (n_envs, 2, 3)
+            实体的轴对齐包围盒（AABB）（使用碰撞几何体）。
         """
         if self.n_geoms == 0:
             gs.raise_exception("Entity has no geoms.")
@@ -2179,7 +2242,33 @@ class RigidEntity(Entity):
         contact_info : dict
             The contact information.
         """
+        """
+        返回最近一次 `scene.step()` 计算的接触信息。
+        如果提供了 `with_entity`，则仅返回涉及调用实体和指定 `with_entity` 的接触信息。否则，返回所有涉及调用实体的接触信息。
 
+        返回的字典包含以下键（一个接触对由两个几何体组成：A 和 B）：
+
+        - 'geom_a'     : 接触对中几何体 A 的全局几何体索引。（实际几何体对象可以通过 `scene.rigid_solver.geoms[geom_a]` 获取）
+        - 'geom_b'     : 接触对中几何体 B 的全局几何体索引。（实际几何体对象可以通过 `scene.rigid_solver.geoms[geom_b]` 获取）
+        - 'link_a'     : 接触对中包含几何体 A 的链接 A 的全局链接索引。（实际链接对象可以通过 `scene.rigid_solver.links[link_a]` 获取）
+        - 'link_b'     : 接触对中包含几何体 B 的链接 B 的全局链接索引。（实际链接对象可以通过 `scene.rigid_solver.links[link_b]` 获取）
+        - 'position'   : 接触位置在世界坐标系中的位置。
+        - 'force_a'    : 作用在几何体 A 上的接触力。
+        - 'force_b'    : 作用在几何体 B 上的接触力。
+        - 'valid_mask' : （仅在场景并行化时）一个布尔掩码，指示接触信息是否有效。
+
+        每个条目的形状为 `(n_envs, n_contacts, ...)` 对于并行化的场景，为 `(n_contacts, ...)` 对于非并行化的场景。
+
+        参数
+        ----
+        with_entity : RigidEntity, 可选
+            要检查接触的实体。默认为 None。
+
+        返回
+        ----
+        contact_info : dict
+            接触信息。
+        """
         scene_contact_info = self._solver.collider.contact_data.to_numpy()
         n_contacts = self._solver.collider.n_contacts.to_numpy()
 
@@ -2245,6 +2334,14 @@ class RigidEntity(Entity):
         -------
         entity_links_force : torch.Tensor, shape (n_links, 3) or (n_envs, n_links, 3)
             The net force applied on each links due to direct external contacts.
+        """
+        """
+        返回由于直接外部接触作用在每个链接上的净力。
+
+        返回
+        ----
+        entity_links_force : torch.Tensor, 形状 (n_links, 3) 或 (n_envs, n_links, 3)
+            由于直接外部接触作用在每个链接上的净力。
         """
         scene_links_force = (
             self._solver.links_state.contact_force.to_torch(gs.device).clone().detach().permute([1, 0, 2])

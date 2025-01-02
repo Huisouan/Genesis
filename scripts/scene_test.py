@@ -53,7 +53,7 @@ def main():
         sim_options=gs.options.SimOptions(
             dt=0.01,
         ),
-        show_viewer=args.vis,
+        show_viewer=True,
     )
 
     ########################## entities ##########################
@@ -76,10 +76,11 @@ def main():
 
     ########################## build ##########################
     scene.build()
-
+    import IPython; IPython.embed()
     motor_dofs = [robot.get_joint(name).dof_idx_local for name in dof_names]
 
     while True:
+        joints = robot.get_joint()
         AABB = robot.get_AABB()
         ang = robot.get_ang()
         contacts = robot.get_contacts()

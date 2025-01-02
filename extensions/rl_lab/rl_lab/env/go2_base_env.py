@@ -84,7 +84,7 @@ class Go2BaseEnv:
             self.episode_sums[name] += rew
 
         self.compute_observations()
-
+        self.last_last_actions[:] = self.last_actions[:]
         self.last_actions[:] = self.actions[:]
         self.last_dof_vel[:] = self.dof_vel[:]
 
