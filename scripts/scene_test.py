@@ -82,8 +82,8 @@ def main():
     scene.build()
     motor_dofs = [robot.get_joint(name).dof_idx_local for name in dof_names]
     joints = []
-    data = torch.zeros(100, 18)  # 修改为正确的初始化方式
-    for i in range(100):
+    data = torch.zeros(1000, 13, 3)  # 修改为正确的初始化方式
+    for i in range(1000):
 
         AABB = robot.get_AABB()
         ang = robot.get_ang()
@@ -92,16 +92,18 @@ def main():
         dofs_control_force = robot.get_dofs_control_force()
         dofs_damping = robot.get_dofs_damping()
         dofs_force = robot.get_dofs_force()
-        data[i] = dofs_force
-        
+        data[i] = robot.get_links_net_contact_force()
         scene.step()
     
+    # 展平数据
+    data_flat = data.view(1000, -1).numpy()  # 展平为 (1000, 39)
+    
     # 可视化 data 中的数据，使用plotly绘制所有列
-    time_steps = np.arange(500)
+    time_steps = np.arange(1000)
     fig = go.Figure()
 
-    for i in range(data.shape[1]):
-        fig.add_trace(go.Scatter(x=time_steps, y=data[:, i], mode='lines', name=f'DOF {i}'))
+    for i in range(data_flat.shape[1]):
+        fig.add_trace(go.Scatter(x=time_steps, y=data_flat[:, i], mode='lines', name=f'DOF {i}'))
 
     fig.update_layout(
         title='DOF Forces Over Time',

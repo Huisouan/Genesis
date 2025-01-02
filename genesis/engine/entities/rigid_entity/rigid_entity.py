@@ -2192,16 +2192,16 @@ class RigidEntity(Entity):
     @gs.assert_built
     def detect_collision(self, env_idx=0):
         """
-        Detects collision for the entity. This only supports a single environment.
+        检测实体的碰撞。此功能仅支持单个环境。
 
-        Note
+        注意
         ----
-        This function re-detects real-time collision for the entity, so it doesn't rely on scene.step() and can be used for applications like motion planning, which doesn't require physical simulation during state sampling.
+        该函数会重新检测实体的实时碰撞，因此它不依赖于 scene.step()，可以用于像运动规划这样的应用，这些应用不需要在状态采样期间进行物理模拟。
 
-        Parameters
-        ----------
-        env_idx : int, optional
-            The index of the environment. Defaults to 0.
+        参数
+        ----
+        env_idx : int, 可选
+            环境的索引。默认为 0。
         """
 
         all_collision_pairs = self._solver.detect_collision(env_idx)

@@ -37,7 +37,7 @@ def main():
     ########################## entities ##########################
     terrain = scene.add_entity(
         morph=MultiScaleTerrain(
-            n_subterrains = (3, 10),
+            n_subterrains = (3, 3),
             subterrain_types=[
                 "flat_terrain", "pyramid_stairs_terrain", "pyramid_sloped_terrain"
             ],
@@ -46,7 +46,7 @@ def main():
     )
     ########################## build ##########################
     scene.build(n_envs=1)
-    """
+
     height_field = terrain.geoms[0].metadata["height_field"]
     rows = horizontal_scale * torch.range(0, height_field.shape[0] - 1, 1, device="cuda").unsqueeze(1).repeat(
         1, height_field.shape[1]
@@ -58,7 +58,7 @@ def main():
 
     poss = torch.cat([rows, cols, heights], dim=-1).reshape(-1, 3)
     scene.draw_debug_spheres(poss=poss, radius=0.05, color=(0, 0, 1, 0.7))
-    """
+
     for _ in range(1000):
         time.sleep(0.5)
         scene.step()

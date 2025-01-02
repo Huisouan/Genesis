@@ -528,3 +528,161 @@ def convert_heightfield_to_watertight_trimesh(height_field_raw, horizontal_scale
     mesh = sdf_mesh.simplify_quadric_decimation(face_count=0, maximum_error=0.0)
 
     return mesh, sdf_mesh
+
+import torch
+
+def convert_heightfield_to_watertight_trimesh(height_field_raw, horizontal_scale, vertical_scale, slope_threshold=None):
+    """
+    将高度场数组转换为由顶点和三角形表示的三角网格。
+    可选地，修正超过给定斜率阈值的垂直表面。
+
+    参数:
+        height_field_raw (np.array): 输入的高度场数组
+        horizontal_scale (float): 高度场的水平比例尺 [米]
+        vertical_scale (float): 高度场的垂直比例尺 [米]
+        slope_threshold (float): 斜率阈值，超过该阈值的表面将被修正为垂直。如果为 None，则不进行修正 (默认: None)
+
+    返回:
+        vertices (np.array(float)): 形状为 (num_vertices, 3) 的数组，每一行表示每个顶点的位置 [米]
+        triangles (np.array(int)): 形状为 (num_triangles, 3) 的数组，每一行表示连接三个顶点的三角形的索引
+    """
+
+    # 获取高度场的行数和列数
+    hf = torch.tensor(height_field_raw, dtype=torch.float32)
+    num_rows, num_cols = hf.shape
+
+    # 创建 x 和 y 坐标网格
+    y = torch.linspace(0, (num_cols - 1) * horizontal_scale, num_cols)
+    x = torch.linspace(0, (num_rows - 1) * horizontal_scale, num_rows)
+    yy, xx = torch.meshgrid(y, x, indexing='ij')
+
+    # 如果提供了斜率阈值，则进行修正
+    if slope_threshold is not None:
+        assert False  # 当前的 SDF 表示法不支持陡峭斜坡
+
+        # 调整斜率阈值以适应比例尺
+        slope_threshold *= horizontal_scale / vertical_scale
+        
+        # 计算需要移动的顶点
+        move_x = torch.zeros((num_rows, num_cols), dtype=torch.float32)
+        move_y = torch.zeros((num_rows, num_cols), dtype=torch.float32)
+        move_corners = torch.zeros((num_rows, num_cols), dtype=torch.float32)
+        
+        # 计算 x 方向的移动
+        move_x[: num_rows - 1, :] += (hf[1:num_rows, :] - hf[: num_rows - 1, :] > slope_threshold).float()
+        move_x[1:num_rows, :] -= (hf[: num_rows - 1, :] - hf[1:num_rows, :] > slope_threshold).float()
+        
+        # 计算 y 方向的移动
+        move_y[:, : num_cols - 1] += (hf[:, 1:num_cols] - hf[:, : num_cols - 1] > slope_threshold).float()
+        move_y[:, 1:num_cols] -= (hf[:, : num_cols - 1] - hf[:, 1:num_cols] > slope_threshold).float()
+        
+        # 计算角落的移动
+        move_corners[: num_rows - 1, : num_cols - 1] += (
+            (hf[1:num_rows, 1:num_cols] - hf[: num_rows - 1, : num_cols - 1] > slope_threshold).float()
+        )
+        move_corners[1:num_rows, 1:num_cols] -= (
+            (hf[: num_rows - 1, : num_cols - 1] - hf[1:num_rows, 1:num_cols] > slope_threshold).float()
+        )
+        
+        # 更新 x 和 y 坐标
+        xx += (move_x + move_corners * (move_x == 0)) * horizontal_scale
+        yy += (move_y + move_corners * (move_y == 0)) * horizontal_scale
+
+    # 创建顶部平面的顶点和三角形
+    vertices_top = torch.zeros((num_rows * num_cols, 3), dtype=torch.float32)
+    vertices_top[:, 0] = xx.flatten()
+    vertices_top[:, 1] = yy.flatten()
+    vertices_top[:, 2] = hf.flatten() * vertical_scale
+    
+    triangles_top = torch.zeros((2 * (num_rows - 1) * (num_cols - 1), 3), dtype=torch.uint32)
+    ind0 = torch.arange(0, num_cols - 1).unsqueeze(0).repeat(num_rows - 1, 1) + torch.arange(0, num_rows - 1).unsqueeze(1) * num_cols
+    ind1 = ind0 + 1
+    ind2 = ind0 + num_cols
+    ind3 = ind2 + 1
+    triangles_top[::2, 0] = ind0.flatten()
+    triangles_top[::2, 1] = ind3.flatten()
+    triangles_top[::2, 2] = ind1.flatten()
+    triangles_top[1::2, 0] = ind0.flatten()
+    triangles_top[1::2, 1] = ind2.flatten()
+    triangles_top[1::2, 2] = ind3.flatten()
+
+    # 创建底部平面的顶点和三角形
+    z_min = torch.min(vertices_top[:, 2]) - 1.0
+
+    vertices_bottom = torch.zeros((num_rows * num_cols, 3), dtype=torch.float32)
+    vertices_bottom[:, 0] = xx.flatten()
+    vertices_bottom[:, 1] = yy.flatten()
+    vertices_bottom[:, 2] = z_min
+    
+    triangles_bottom = torch.zeros((2 * (num_rows - 1) * (num_cols - 1), 3), dtype=torch.uint32)
+    triangles_bottom[::2, 0] = ind0.flatten()
+    triangles_bottom[::2, 2] = ind3.flatten()
+    triangles_bottom[::2, 1] = ind1.flatten()
+    triangles_bottom[1::2, 0] = ind0.flatten()
+    triangles_bottom[1::2, 2] = ind2.flatten()
+    triangles_bottom[1::2, 1] = ind3.flatten()
+    triangles_bottom += num_rows * num_cols
+
+    # 创建侧面的三角形
+    triangles_side_0 = torch.zeros([2 * (num_rows - 1), 3], dtype=torch.uint32)
+    ind0 = torch.arange(0, num_rows - 1) * num_cols
+    ind1 = ind0 + num_cols
+    ind2 = ind0 + num_rows * num_cols
+    ind3 = ind1 + num_rows * num_cols
+    triangles_side_0[::2, 0] = ind0
+    triangles_side_0[::2, 1] = ind2
+    triangles_side_0[::2, 2] = ind1
+    triangles_side_0[1::2, 0] = ind1
+    triangles_side_0[1::2, 1] = ind2
+    triangles_side_0[1::2, 2] = ind3
+
+    triangles_side_1 = torch.zeros([2 * (num_cols - 1), 3], dtype=torch.uint32)
+    ind0 = torch.arange(0, num_cols - 1)
+    ind1 = ind0 + 1
+    ind2 = ind0 + num_rows * num_cols
+    ind3 = ind1 + num_rows * num_cols
+    triangles_side_1[::2, 0] = ind0
+    triangles_side_1[::2, 1] = ind1
+    triangles_side_1[::2, 2] = ind2
+    triangles_side_1[1::2, 0] = ind1
+    triangles_side_1[1::2, 1] = ind3
+    triangles_side_1[1::2, 2] = ind2
+
+    triangles_side_2 = torch.zeros([2 * (num_rows - 1), 3], dtype=torch.uint32)
+    ind0 = torch.arange(0, num_rows - 1) * num_cols + num_cols - 1
+    ind1 = ind0 + num_cols
+    ind2 = ind0 + num_rows * num_cols
+    ind3 = ind1 + num_rows * num_cols
+    triangles_side_2[::2, 0] = ind0
+    triangles_side_2[::2, 1] = ind1
+    triangles_side_2[::2, 2] = ind2
+    triangles_side_2[1::2, 0] = ind1
+    triangles_side_2[1::2, 1] = ind3
+    triangles_side_2[1::2, 2] = ind2
+
+    triangles_side_3 = torch.zeros([2 * (num_cols - 1), 3], dtype=torch.uint32)
+    ind0 = torch.arange(0, num_cols - 1) + (num_rows - 1) * num_cols
+    ind1 = ind0 + 1
+    ind2 = ind0 + num_rows * num_cols
+    ind3 = ind1 + num_rows * num_cols
+    triangles_side_3[::2, 0] = ind0
+    triangles_side_3[::2, 1] = ind2
+    triangles_side_3[::2, 2] = ind1
+    triangles_side_3[1::2, 0] = ind1
+    triangles_side_3[1::2, 1] = ind2
+    triangles_side_3[1::2, 2] = ind3
+
+    # 合并所有顶点和三角形
+    vertices = torch.cat([vertices_top, vertices_bottom], dim=0)
+    triangles = torch.cat(
+        [triangles_top, triangles_bottom, triangles_side_0, triangles_side_1, triangles_side_2, triangles_side_3],
+        dim=0,
+    )
+
+    # 创建一个均匀分布的完整网格，用于更快的 SDF 生成
+    sdf_mesh = trimesh.Trimesh(vertices.numpy(), triangles.numpy(), process=False)
+    
+    # 创建一个简化后的网格，用于非 SDF 目的，以节省内存
+    mesh = sdf_mesh.simplify_quadric_decimation(face_count=0, maximum_error=0.0)
+
+    return mesh, sdf_mesh
