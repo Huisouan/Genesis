@@ -1932,42 +1932,42 @@ class RigidEntity(Entity):
     @gs.assert_built
     def get_dofs_control_force(self, dofs_idx_local=None, envs_idx=None):
         """
-        Get the entity's dofs' internal control force, computed based on the position/velocity control command.
+        获取基于位置/速度控制命令计算的实体 DOF 内部控制力。
 
-        Parameters
-        ----------
-        dofs_idx_local : None | array_like, optional
-            The indices of the dofs to get. If None, all dofs will be returned. Note that here this uses the local `q_idx`, not the scene-level one. Defaults to None.
-        envs_idx : None | array_like, optional
-            The indices of the environments. If None, all environments will be considered. Defaults to None.
+        参数
+        ----
+        dofs_idx_local : None | array_like, 可选
+            要获取的 DOF 的索引。如果为 None，则返回所有 DOF。注意这里使用的是本地 `q_idx`，而不是场景级别的索引。默认为 None。
+        envs_idx : None | array_like, 可选
+            环境的索引。如果为 None，则考虑所有环境。默认为 None。
 
-        Returns
-        -------
-        control_force : torch.Tensor, shape (n_dofs,) or (n_envs, n_dofs)
-            The entity's dofs' internal control force.
+        返回
+        ----
+        control_force : torch.Tensor, 形状 (n_dofs,) 或 (n_envs, n_dofs)
+            实体的 DOF 内部控制力。
         """
         return self._solver.get_dofs_control_force(self._get_dofs_idx(dofs_idx_local), envs_idx)
 
     @gs.assert_built
     def get_dofs_force(self, dofs_idx_local=None, envs_idx=None):
         """
-        Get the entity's dofs' internal force at the current time step.
+        获取实体在当前时间步的 DOF 内部力。
 
-        Note
+        注意
         ----
-        Different from `get_dofs_control_force`, this function returns the actual internal force experienced by all the dofs at the current time step.
+        与 `get_dofs_control_force` 不同，此函数返回所有 DOF 在当前时间步实际经历的内部力。
 
-        Parameters
-        ----------
-        dofs_idx_local : None | array_like, optional
-            The indices of the dofs to get. If None, all dofs will be returned. Note that here this uses the local `q_idx`, not the scene-level one. Defaults to None.
-        envs_idx : None | array_like, optional
-            The indices of the environments. If None, all environments will be considered. Defaults to None.
+        参数
+        ----
+        dofs_idx_local : None | array_like, 可选
+            要获取的 DOF 的索引。如果为 None，则返回所有 DOF。注意这里使用的是本地 `q_idx`，而不是场景级别的索引。默认为 None。
+        envs_idx : None | array_like, 可选
+            环境的索引。如果为 None，则考虑所有环境。默认为 None。
 
-        Returns
-        -------
-        force : torch.Tensor, shape (n_dofs,) or (n_envs, n_dofs)
-            The entity's dofs' force.
+        返回
+        ----
+        force : torch.Tensor, 形状 (n_dofs,) 或 (n_envs, n_dofs)
+            实体的 DOF 力。
         """
         return self._solver.get_dofs_force(self._get_dofs_idx(dofs_idx_local), envs_idx)
 

@@ -80,7 +80,18 @@ def main():
     motor_dofs = [robot.get_joint(name).dof_idx_local for name in dof_names]
 
     while True:
+        AABB = robot.get_AABB()
+        ang = robot.get_ang()
+        contacts = robot.get_contacts()
+        dofs_armature = robot.get_dofs_armature()
+        dofs_control_force = robot.get_dofs_control_force()
+        dofs_damping = robot.get_dofs_damping()
+        dofs_force = robot.get_dofs_force()
+        
+        
         scene.step()
+
+
 
 if __name__ == "__main__":
     main()

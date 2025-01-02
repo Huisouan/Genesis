@@ -54,7 +54,7 @@ class Go2BaseEnv:
         self.projected_gravity = transform_by_quat(self.global_gravity, inv_base_quat)
         self.dof_pos[:] = self.robot.get_dofs_position(self.motor_dofs)
         self.dof_vel[:] = self.robot.get_dofs_velocity(self.motor_dofs)
-
+        self.control_force[:] = self.robot.get_dofs_control_force(self.motor_dofs)
 
 
         # resample commands
@@ -138,9 +138,11 @@ class Go2BaseEnv:
 
         # reset buffers
         self.last_actions[envs_idx] = 0.0
+        self.last_last_actions[envs_idx] = 0.0
         self.last_dof_vel[envs_idx] = 0.0
         self.episode_length_buf[envs_idx] = 0
         self.reset_buf[envs_idx] = True
+        self.control_force[envs_idx] = 0.0
 
         # fill extras
         self.extras["episode"] = {}
@@ -242,6 +244,7 @@ class Go2BaseEnv:
                                            device=device,dtype=gs.tc_float,)
         self.actions = torch.zeros((num_envs, self.num_actions), device=device, dtype=gs.tc_float)
         self.last_actions = torch.zeros_like(self.actions)
+        self.last_last_actions = torch.zeros_like(self.actions)
         self.dof_pos = torch.zeros_like(self.actions)
         self.dof_vel = torch.zeros_like(self.actions)
         self.last_dof_vel = torch.zeros_like(self.actions)
@@ -249,7 +252,7 @@ class Go2BaseEnv:
         self.base_quat = torch.zeros((num_envs, 4), device=device, dtype=gs.tc_float)
         self.default_dof_pos = torch.tensor([self.env_cfg["default_joint_angles"][name] for name in self.env_cfg["dof_names"]],
                                             device=device,dtype=gs.tc_float,)
-        
+        self.control_force = torch.zeros((num_envs, self.num_actions), device=device, dtype=gs.tc_float)
         self.base_height_points = self._init_base_height_points()# points at which the height measurments are sampled (in base frame)
         self.height_samples = None
         self.extras = dict()  # extra information for logging
@@ -385,9 +388,9 @@ class Go2BaseEnv:
         # second order smoothness
         return torch.sum(torch.square(self.actions - self.last_actions - self.last_actions + self.last_last_actions), dim=1)
     
-    def _reward_torques(self):
-        # Penalize torques
-        return torch.sum(torch.square(self.torques), dim=1)
+    def _reward_control_force(self):
+        # Penalize control_force
+        return torch.sum(torch.square(self.control_force), dim=1)
 
     def _reward_dof_vel(self):
         # Penalize dof velocities
