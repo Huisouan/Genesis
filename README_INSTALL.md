@@ -33,12 +33,26 @@ pip install -e .
 cd extensions/rl_lab
 pip install -e.
 cd ..
+git clone https://github.com/Huisouan/rsl_rl.git
 cd rsl_rl
 pip install -e.
+cd ..
+#如果你想要使用sim2sim以及sim2real
+git clone https://github.com/Huisouan/inference_bridge.git
+cd inference_bridge
+pip install -e.
+cd ..
+git clone https://github.com/Huisouan/unitree_sdk2_python.git
+cd unitree_sdk2_python
+pip install -e. 
+cd ..
+git clone https://github.com/Huisouan/unitree_s2r.git
+cd unitree_s2r
+pip install -e.
+cd ..
 
 #最后我们需要安装几个额外的pip包来保证所有代码都能正常运行
 
 pip install tensorboard einops open3d
-
-
 ```
+
