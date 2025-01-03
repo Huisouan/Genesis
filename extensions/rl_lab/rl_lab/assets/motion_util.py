@@ -23,8 +23,8 @@ os.sys.path.insert(0, parentdir)
 
 import numpy as np
 
-from pybullet_utils import transformations
-from robot_lab.third_party.rsl_rl_amp.datasets import pose3d
+from . import transformations
+from . import pose3d
 
 
 def standardize_quaternion(q):

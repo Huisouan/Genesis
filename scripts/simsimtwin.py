@@ -14,8 +14,6 @@ default_network = "lo"
 base_pos = [0.0, 0.0, 0.42]
 base_quat = [0.0, 0.0, 0.0, 1.0]
 
-
-
 dof_names = [
             "FR_hip_joint",
             "FR_thigh_joint",

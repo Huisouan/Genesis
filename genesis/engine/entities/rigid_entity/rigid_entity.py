@@ -2134,21 +2134,21 @@ class RigidEntity(Entity):
     @gs.assert_built
     def get_dofs_limit(self, dofs_idx=None, envs_idx=None):
         """
-        Get the positional limits (min and max) for the entity's dofs.
+        获取实体自由度（DOFs）的位置限制（最小值和最大值）。
 
-        Parameters
+        参数
         ----------
-        dofs_idx : None | array_like, optional
-            The indices of the dofs to get. If None, all dofs will be returned. Note that here this uses the local `q_idx`, not the scene-level one. Defaults to None.
-        envs_idx : None | array_like, optional
-            The indices of the environments. If None, all environments will be considered. Defaults to None.
+        dofs_idx : None | array_like, 可选
+            要获取的自由度的索引。如果为 None，则返回所有自由度。注意，这里使用的是本地 `q_idx`，而不是场景级别的索引。默认为 None。
+        envs_idx : None | array_like, 可选
+            环境的索引。如果为 None，则考虑所有环境。默认为 None。
 
-        Returns
+        返回
         -------
-        lower_limit : torch.Tensor, shape (n_dofs,) or (n_envs, n_dofs)
-            The lower limit of the positional limits for the entity's dofs.
-        upper_limit : torch.Tensor, shape (n_dofs,) or (n_envs, n_dofs)
-            The upper limit of the positional limits for the entity's dofs.
+        lower_limit : torch.Tensor, 形状 (n_dofs,) 或 (n_envs, n_dofs)
+            实体自由度的位置限制的下限。
+        upper_limit : torch.Tensor, 形状 (n_dofs,) 或 (n_envs, n_dofs)
+            实体自由度的位置限制的上限。
         """
         return self._solver.get_dofs_limit(self._get_dofs_idx(dofs_idx), envs_idx)
 

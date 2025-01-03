@@ -218,7 +218,7 @@ class Go2BaseEnv:
         # PD control parameters
         self.robot.set_dofs_kp([self.env_cfg["kp"]] * self.num_actions, self.motor_dofs)
         self.robot.set_dofs_kv([self.env_cfg["kd"]] * self.num_actions, self.motor_dofs)
-
+        self.robot_dof_limits = self.robot.get_dofs_limit(self.motor_dofs)
         if not self.terriancfg['flat_terrain'] :
             height_field = self.terrain.geoms[0].metadata["height_field"]
 
@@ -255,6 +255,9 @@ class Go2BaseEnv:
         self.control_force = torch.zeros((num_envs, self.num_actions), device=device, dtype=gs.tc_float)
         self.base_height_points = self._init_base_height_points()# points at which the height measurments are sampled (in base frame)
         self.height_samples = None
+        
+        
+        
         self.extras = dict()  # extra information for logging
         
     def _resample_commands(self, envs_idx):
