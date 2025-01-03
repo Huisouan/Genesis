@@ -36,7 +36,7 @@ class Go2PAmp():
         self.env_cfg.env_cfg.amp = {
             #环境中关于AMP算法的配置
             "urdf_path":  "datasets/go2_description/urdf/go2_description.urdf",
-            "amp_replay_buffer_size": 100000,
+            "amp_replay_buffer_size": 1000000,
             "ee_names" : ["FL_foot", "FR_foot", "RL_foot", "RR_foot"],
             "amp_motion_files":glob.glob("datasets/mocap_motions_go2/*"),
             "preload_transitions":True,
