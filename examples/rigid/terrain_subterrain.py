@@ -59,7 +59,7 @@ def main():
     poss = torch.cat([rows, cols, heights], dim=-1).reshape(-1, 3)
     scene.draw_debug_spheres(poss=poss, radius=0.05, color=(0, 0, 1, 0.7))
 
-    for _ in range(1000):
+    while True:
         time.sleep(0.5)
         scene.step()
 

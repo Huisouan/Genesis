@@ -531,7 +531,7 @@ def convert_heightfield_to_watertight_trimesh(height_field_raw, horizontal_scale
 
 import torch
 
-def convert_heightfield_to_watertight_trimesh(height_field_raw, horizontal_scale, vertical_scale, slope_threshold=None):
+def convert_heightfield_to_watertight_trimesh_torch(height_field_raw, horizontal_scale, vertical_scale, slope_threshold=None):
     """
     将高度场数组转换为由顶点和三角形表示的三角网格。
     可选地，修正超过给定斜率阈值的垂直表面。
