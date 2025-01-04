@@ -24,10 +24,9 @@ class Go2Himloco():
             "action_rate": -0.01,
             "similar_to_default": -0.05,
             "joint_power": -2e-5,
-            
+    
         }
     
-
     def get_env_cfg(self):
         return self.env_cfg.get_cfg()
     def get_train_cfg(self):

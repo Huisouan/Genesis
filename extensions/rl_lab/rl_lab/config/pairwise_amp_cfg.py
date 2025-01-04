@@ -4,7 +4,7 @@ class Go2PAmp():
     def __init__(self,exp_name, max_iterations):
         self.env_cfg = BaseEnvCfg()
         self.train_cfg = BaseTrainCfg(exp_name, max_iterations)
-        self.train_cfg.runner_class_name = "AmpOnPolicyRunner"
+        self.train_cfg.runner_class_name = "PAmpOnPolicyRunner"
         self.train_cfg.policy.class_name = "ActorCritic"
         self.train_cfg.algorithm.class_name = "PAMPPPO"
 
