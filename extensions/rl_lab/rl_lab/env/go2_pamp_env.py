@@ -7,8 +7,15 @@ from rl_lab.utils.kinematics import urdf
 
 
 class Go2PAmpEnv(Go2BaseEnv):
-    def __init__(self,num_envs, env_cfg, obs_cfg, reward_cfg, command_cfg):
-        super().__init__(num_envs=num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg)
+    def __init__(self,num_envs, env_cfg, obs_cfg, reward_cfg, command_cfg,show_viewer=False, device="cuda"):
+        super().__init__(num_envs=num_envs, 
+                        env_cfg=env_cfg, 
+                        obs_cfg=obs_cfg, 
+                        reward_cfg=reward_cfg, 
+                        command_cfg=command_cfg,
+                        show_viewer=show_viewer,
+                        device=device)
+
         self.amp_cfg = self.env_cfg["amp"]
         self.chain_ee = []
         for ee_name in self.amp_cfg["ee_names"]:
