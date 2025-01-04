@@ -11,7 +11,7 @@ from rsl_rl.utils.wrappers import RslRlVecEnvWrapper
 import genesis as gs
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", "--exp_name", type=str, default="Go2PAmp")
+    parser.add_argument("-e", "--exp_name", type=str, default="Go2Amp")
     parser.add_argument("-B", "--num_envs", type=int, default=4096)
     parser.add_argument("--max_iterations", type=int, default=10000)
     args = parser.parse_args()
