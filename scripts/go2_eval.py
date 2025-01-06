@@ -15,8 +15,8 @@ from rsl_rl.utils.wrappers import (
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", "--exp_name", type=str, default="Go2Amp")
-    parser.add_argument("--ckpt", type=int, default=100)
+    parser.add_argument("-e", "--exp_name", type=str, default="Go2ActorCritic")
+    parser.add_argument("--ckpt", type=int, default=3800)
     args = parser.parse_args()
 
     gs.init()

@@ -571,20 +571,20 @@ class Scene(RBC):
         compile_kernels=True,
     ):
         """
-        Builds the scene once all entities have been added. This operation is required before running the simulation.
+        在所有实体添加完成后构建场景。此操作是在运行模拟之前必需的。
 
-        Parameters
-        ----------
-        n_envs : int
-            Number of parallel environments to create. If `n_envs` is 0, the scene will not have a batching dimension. If `n_envs` is greater than 0, the first dimension of all the input and returned states will be the batch dimension.
-        env_spacing : tuple of float, shape (2,)
-            The spacing between adjacent environments in the scene. This is for visualization purposes only and does not change simulation-related poses.
-        n_envs_per_row : int
-            The number of environments per row for visualization. If None, it will be set to `sqrt(n_envs)`.
-        center_envs_at_origin : bool
-            Whether to put the center of all the environments at the origin (for visualization only).
-        compile_kernels : bool
-            Whether to compile the simulation kernels inside `build()`. If False, the kernels will not be compiled (or loaded if found in the cache) until the first call of `scene.step()`. This is useful for cases you don't want to run the actual simulation, but rather just want to visualize the created scene.
+        参数
+        ------
+        - n_envs : int
+            创建的并行环境数量。如果 `n_envs` 为 0，则场景将没有批处理维度。如果 `n_envs` 大于 0，则所有输入和返回状态的第一个维度将是批处理维度。
+        - env_spacing : float 的元组，形状为 (2,)
+            场景中相邻环境之间的间距。这仅用于可视化目的，并不会改变与模拟相关的位姿。
+        - n_envs_per_row : int
+            可视化时每行的环境数量。如果为 None，则设置为 `sqrt(n_envs)`。
+        - center_envs_at_origin : bool
+            是否将所有环境的中心放置在原点（仅用于可视化）。
+        - compile_kernels : bool
+            是否在 `build()` 内编译模拟内核。如果为 False，则内核不会被编译（或从缓存加载），直到第一次调用 `scene.step()`。这在你不想运行实际模拟而只是想可视化创建的场景时非常有用。       
         """
         with gs.logger.timer(f"Building scene ~~~<{self._uid}>~~~..."):
             self._parallelize(n_envs, env_spacing, n_envs_per_row, center_envs_at_origin)

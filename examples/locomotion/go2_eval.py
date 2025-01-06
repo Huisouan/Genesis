@@ -11,7 +11,7 @@ import genesis as gs
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", "--exp_name", type=str, default="go2-walking")
+    parser.add_argument("-e", "--exp_name", type=str, default="Go2ActorCritic")
     parser.add_argument("--ckpt", type=int, default=100)
     args = parser.parse_args()
 
@@ -22,7 +22,7 @@ def main():
     reward_cfg["reward_scales"] = {}
 
     env = Go2Env(
-        num_envs=1,
+        num_envs=36,
         env_cfg=env_cfg,
         obs_cfg=obs_cfg,
         reward_cfg=reward_cfg,

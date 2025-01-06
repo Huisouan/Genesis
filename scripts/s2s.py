@@ -5,7 +5,7 @@ import pygame
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize
 from unitree_sdk2py.go2.low_level.go2_pd_sim2sim import Go2_SIM2SIM
 from unitree_bridge.a2c import A2C
-from unitree_bridge.config.algo.algocfg import A2CConfig
+from unitree_bridge.config.algo.algocfg import A2CConfig_ge
 from unitree_bridge.config.robot.bot_cfg import GO2
 from unitree_bridge.process.joystick import *
 # 默认网络接口名称
@@ -30,7 +30,7 @@ def main(go2:Go2_SIM2SIM):
         # 主循环
     init_pygame()
     joystick = init_joystick()
-    Algocfg = A2CConfig
+    Algocfg = A2CConfig_ge
     Botcfg = GO2
     model = A2C(Algocfg, Botcfg)
     target_interval = 0.02

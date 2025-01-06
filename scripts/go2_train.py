@@ -35,7 +35,7 @@ def main():
     #创建Go2Env环境
     env_class_name = env_cfg['env_name']
     env_class = getattr(sys.modules[__name__], env_class_name)
-    env = env_class(num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg)
+    env = env_class(num_envs=args.num_envs, env_cfg=env_cfg, obs_cfg=obs_cfg, reward_cfg=reward_cfg, command_cfg=command_cfg,show_viewer=True)
     #使用RslRlVecEnvWrapper包装环境
     env = RslRlVecEnvWrapper(env)
     #创建OnPolicyRunner

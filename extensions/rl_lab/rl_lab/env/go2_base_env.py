@@ -210,7 +210,13 @@ class Go2BaseEnv:
         )
 
         # build
-        self.scene.build(n_envs=num_envs)
+        self.scene.build(
+            n_envs=num_envs,
+            env_spacing=(0, 0),
+            n_envs_per_row=None,
+            center_envs_at_origin=True,
+            compile_kernels=True,
+        )
 
         # names to indices
         self.motor_dofs = [self.robot.get_joint(name).dof_idx_local for name in self.env_cfg["dof_names"]]

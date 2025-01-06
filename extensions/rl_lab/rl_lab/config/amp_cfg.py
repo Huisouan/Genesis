@@ -43,6 +43,9 @@ class Go2Amp():
         }
         self.env_cfg.obs_cfg.num_amp_observations = 42
         
+        self.env_cfg.command_cfg.lin_vel_x_range = [0, 3]
+        self.env_cfg.command_cfg.lin_vel_y_range = [-0.3, 0.3]
+        
         self.env_cfg.reward_cfg.reward_scales = {
             #root
             "tracking_lin_vel": 1.5*30,
