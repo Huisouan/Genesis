@@ -28,7 +28,7 @@ def main():
     env_class_name = env_cfg['env_name']
     env_class = getattr(sys.modules[__name__], env_class_name)
     env = env_class(
-        num_envs=1,
+        num_envs=32,
         env_cfg=env_cfg,
         obs_cfg=obs_cfg,
         reward_cfg=reward_cfg,

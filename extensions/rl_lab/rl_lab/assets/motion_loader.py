@@ -326,6 +326,7 @@ class AMPLoader:
 
     def feed_forward_generator(self, num_mini_batch, mini_batch_size):
         """Generates a batch of AMP transitions."""
+        
         for _ in range(num_mini_batch):
             if self.preload_transitions:
                 idxs = np.random.choice(self.preloaded_s.shape[0], size=mini_batch_size)

@@ -45,15 +45,15 @@ class Go2Amp():
         
         self.env_cfg.reward_cfg.reward_scales = {
             #root
-            "tracking_lin_vel": 1.5,
-            "tracking_ang_vel": 0.75,
-            "lin_vel_z": -2.0,
-            "orientation": -0.2,
-            "base_height": -0.4,
+            "tracking_lin_vel": 1.5*30,
+            "tracking_ang_vel": 0.75*30,
+            #"lin_vel_z": -2.0,
+            #"orientation": -0.2,
+            #"base_height": -0.4,
             #joint
-            "action_rate": -0.01,
-            "similar_to_default": -0.05,
-            "joint_power": -2e-5,
+            #"action_rate": -0.01,
+            #"similar_to_default": -0.05,
+            #"joint_power": -2e-5,
 
         }
     
