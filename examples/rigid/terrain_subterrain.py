@@ -60,7 +60,6 @@ def main():
     scene.draw_debug_spheres(poss=poss, radius=0.05, color=(0, 0, 1, 0.7))
 
     while True:
-        time.sleep(0.5)
         scene.step()
 
 

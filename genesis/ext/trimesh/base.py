@@ -2466,18 +2466,18 @@ class Trimesh(Geometry3D):
 
     def simplify_quadric_decimation(self, face_count, maximum_error=np.inf, boundary_weight=1.0):
         """
-        A thin wrapper around the `open3d` implementation of this:
+        这是对 `open3d` 实现的薄封装：
         `open3d.geometry.TriangleMesh.simplify_quadric_decimation`
 
-        Parameters
-        -----------
+        参数
+        ----------
         face_count : int
-          Number of faces desired in the resulting mesh.
+          简化后网格中希望保留的面的数量。
 
-        Returns
+        返回
         ---------
         simple : trimesh.Trimesh
-          Simplified version of mesh.
+          简化后的网格。
         """
         simple = self.as_open3d.simplify_quadric_decimation(
             int(face_count), float(maximum_error), float(boundary_weight)
