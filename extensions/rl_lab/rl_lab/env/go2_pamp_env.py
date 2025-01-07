@@ -37,6 +37,8 @@ class Go2PAmpEnv(Go2BaseEnv):
         joint_pos = self.dof_pos
         joint_vel = self.dof_vel
         foot_pos = []
+        joint_pos = self.amp_loader.reorder_from_isaacsim_to_isaacgym_tool(joint_pos)
+        joint_vel = self.amp_loader.reorder_from_isaacsim_to_isaacgym_tool(joint_vel)
         with torch.no_grad():
             for i, chain_ee in enumerate(self.chain_ee):
                 foot_pos.append(chain_ee.forward_kinematics(joint_pos[:, i * 3 : i * 3 + 3]).get_matrix()[:, :3, 3])

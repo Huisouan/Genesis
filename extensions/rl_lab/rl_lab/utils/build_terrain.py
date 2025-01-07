@@ -392,142 +392,142 @@ def convert_heightfield_to_watertight_trimesh(height_field_raw, horizontal_scale
 
     # 获取高度场的行数和列数
     hf = height_field_raw
-    num_rows = hf.shape[0]
-    num_cols = hf.shape[1]
+    num_rows = hf.shape[0]  # 获取高度场的行数
+    num_cols = hf.shape[1]  # 获取高度场的列数
 
     # 创建 x 和 y 坐标网格
-    y = np.linspace(0, (num_cols - 1) * horizontal_scale, num_cols)
-    x = np.linspace(0, (num_rows - 1) * horizontal_scale, num_rows)
-    yy, xx = np.meshgrid(y, x)
+    y = np.linspace(0, (num_cols - 1) * horizontal_scale, num_cols)  # 创建 y 坐标网格
+    x = np.linspace(0, (num_rows - 1) * horizontal_scale, num_rows)  # 创建 x 坐标网格
+    yy, xx = np.meshgrid(y, x)  # 创建二维网格坐标
 
     # 如果提供了斜率阈值，则进行修正
     if slope_threshold is not None:
         assert False  # 当前的 SDF 表示法不支持陡峭斜坡
 
         # 调整斜率阈值以适应比例尺
-        slope_threshold *= horizontal_scale / vertical_scale
+        slope_threshold *= horizontal_scale / vertical_scale  # 根据比例尺调整斜率阈值
         
         # 计算需要移动的顶点
-        move_x = np.zeros((num_rows, num_cols))
-        move_y = np.zeros((num_rows, num_cols))
-        move_corners = np.zeros((num_rows, num_cols))
+        move_x = np.zeros((num_rows, num_cols))  # 初始化 x 方向的移动矩阵
+        move_y = np.zeros((num_rows, num_cols))  # 初始化 y 方向的移动矩阵
+        move_corners = np.zeros((num_rows, num_cols))  # 初始化角落的移动矩阵
         
         # 计算 x 方向的移动
-        move_x[: num_rows - 1, :] += hf[1:num_rows, :] - hf[: num_rows - 1, :] > slope_threshold
-        move_x[1:num_rows, :] -= hf[: num_rows - 1, :] - hf[1:num_rows, :] > slope_threshold
+        move_x[: num_rows - 1, :] += hf[1:num_rows, :] - hf[: num_rows - 1, :] > slope_threshold  # 检查相邻行的高度差是否超过阈值
+        move_x[1:num_rows, :] -= hf[: num_rows - 1, :] - hf[1:num_rows, :] > slope_threshold  # 检查相邻行的高度差是否超过阈值
         
         # 计算 y 方向的移动
-        move_y[:, : num_cols - 1] += hf[:, 1:num_cols] - hf[:, : num_cols - 1] > slope_threshold
-        move_y[:, 1:num_cols] -= hf[:, : num_cols - 1] - hf[:, 1:num_cols] > slope_threshold
+        move_y[:, : num_cols - 1] += hf[:, 1:num_cols] - hf[:, : num_cols - 1] > slope_threshold  # 检查相邻列的高度差是否超过阈值
+        move_y[:, 1:num_cols] -= hf[:, : num_cols - 1] - hf[:, 1:num_cols] > slope_threshold  # 检查相邻列的高度差是否超过阈值
         
         # 计算角落的移动
         move_corners[: num_rows - 1, : num_cols - 1] += (
             hf[1:num_rows, 1:num_cols] - hf[: num_rows - 1, : num_cols - 1] > slope_threshold
-        )
+        )  # 检查对角线高度差是否超过阈值
         move_corners[1:num_rows, 1:num_cols] -= (
             hf[: num_rows - 1, : num_cols - 1] - hf[1:num_rows, 1:num_cols] > slope_threshold
-        )
+        )  # 检查对角线高度差是否超过阈值
         
         # 更新 x 和 y 坐标
-        xx += (move_x + move_corners * (move_x == 0)) * horizontal_scale
-        yy += (move_y + move_corners * (move_y == 0)) * horizontal_scale
+        xx += (move_x + move_corners * (move_x == 0)) * horizontal_scale  # 更新 x 坐标
+        yy += (move_y + move_corners * (move_y == 0)) * horizontal_scale  # 更新 y 坐标
 
     # 创建顶部平面的顶点和三角形
-    vertices_top = np.zeros((num_rows * num_cols, 3), dtype=np.float32)
-    vertices_top[:, 0] = xx.flatten()
-    vertices_top[:, 1] = yy.flatten()
-    vertices_top[:, 2] = hf.flatten() * vertical_scale
+    vertices_top = np.zeros((num_rows * num_cols, 3), dtype=np.float32)  # 初始化顶部平面的顶点数组
+    vertices_top[:, 0] = xx.flatten()  # 设置 x 坐标
+    vertices_top[:, 1] = yy.flatten()  # 设置 y 坐标
+    vertices_top[:, 2] = hf.flatten() * vertical_scale  # 设置 z 坐标
     
-    triangles_top = -np.ones((2 * (num_rows - 1) * (num_cols - 1), 3), dtype=np.uint32)
+    triangles_top = -np.ones((2 * (num_rows - 1) * (num_cols - 1), 3), dtype=np.uint32)  # 初始化顶部平面的三角形数组
     for i in range(num_rows - 1):
-        ind0 = np.arange(0, num_cols - 1) + i * num_cols
-        ind1 = ind0 + 1
-        ind2 = ind0 + num_cols
-        ind3 = ind2 + 1
-        start = 2 * i * (num_cols - 1)
-        stop = start + 2 * (num_cols - 1)
-        triangles_top[start:stop:2, 0] = ind0
-        triangles_top[start:stop:2, 1] = ind3
-        triangles_top[start:stop:2, 2] = ind1
-        triangles_top[start + 1 : stop : 2, 0] = ind0
-        triangles_top[start + 1 : stop : 2, 1] = ind2
-        triangles_top[start + 1 : stop : 2, 2] = ind3
+        ind0 = np.arange(0, num_cols - 1) + i * num_cols  # 计算当前行的第一个索引
+        ind1 = ind0 + 1  # 计算当前行的第二个索引
+        ind2 = ind0 + num_cols  # 计算下一行的第一个索引
+        ind3 = ind2 + 1  # 计算下一行的第二个索引
+        start = 2 * i * (num_cols - 1)  # 计算当前行的起始索引
+        stop = start + 2 * (num_cols - 1)  # 计算当前行的结束索引
+        triangles_top[start:stop:2, 0] = ind0  # 设置第一个三角形的第一个顶点索引
+        triangles_top[start:stop:2, 1] = ind3  # 设置第一个三角形的第三个顶点索引
+        triangles_top[start:stop:2, 2] = ind1  # 设置第一个三角形的第二个顶点索引
+        triangles_top[start + 1 : stop : 2, 0] = ind0  # 设置第二个三角形的第一个顶点索引
+        triangles_top[start + 1 : stop : 2, 1] = ind2  # 设置第二个三角形的第三个顶点索引
+        triangles_top[start + 1 : stop : 2, 2] = ind3  # 设置第二个三角形的第二个顶点索引
 
     # 创建底部平面的顶点和三角形
-    z_min = np.min(vertices_top[:, 2]) - 1.0
+    z_min = np.min(vertices_top[:, 2]) - 1.0  # 计算底部平面的最低 z 坐标
 
-    vertices_bottom = np.zeros((num_rows * num_cols, 3), dtype=np.float32)
-    vertices_bottom[:, 0] = xx.flatten()
-    vertices_bottom[:, 1] = yy.flatten()
-    vertices_bottom[:, 2] = z_min
+    vertices_bottom = np.zeros((num_rows * num_cols, 3), dtype=np.float32)  # 初始化底部平面的顶点数组
+    vertices_bottom[:, 0] = xx.flatten()  # 设置 x 坐标
+    vertices_bottom[:, 1] = yy.flatten()  # 设置 y 坐标
+    vertices_bottom[:, 2] = z_min  # 设置 z 坐标
     
-    triangles_bottom = -np.ones((2 * (num_rows - 1) * (num_cols - 1), 3), dtype=np.uint32)
+    triangles_bottom = -np.ones((2 * (num_rows - 1) * (num_cols - 1), 3), dtype=np.uint32)  # 初始化底部平面的三角形数组
     for i in range(num_rows - 1):
-        ind0 = np.arange(0, num_cols - 1) + i * num_cols
-        ind1 = ind0 + 1
-        ind2 = ind0 + num_cols
-        ind3 = ind2 + 1
-        start = 2 * i * (num_cols - 1)
-        stop = start + 2 * (num_cols - 1)
-        triangles_bottom[start:stop:2, 0] = ind0
-        triangles_bottom[start:stop:2, 2] = ind3
-        triangles_bottom[start:stop:2, 1] = ind1
-        triangles_bottom[start + 1 : stop : 2, 0] = ind0
-        triangles_bottom[start + 1 : stop : 2, 2] = ind2
-        triangles_bottom[start + 1 : stop : 2, 1] = ind3
-    triangles_bottom += num_rows * num_cols
+        ind0 = np.arange(0, num_cols - 1) + i * num_cols  # 计算当前行的第一个索引
+        ind1 = ind0 + 1  # 计算当前行的第二个索引
+        ind2 = ind0 + num_cols  # 计算下一行的第一个索引
+        ind3 = ind2 + 1  # 计算下一行的第二个索引
+        start = 2 * i * (num_cols - 1)  # 计算当前行的起始索引
+        stop = start + 2 * (num_cols - 1)  # 计算当前行的结束索引
+        triangles_bottom[start:stop:2, 0] = ind0  # 设置第一个三角形的第一个顶点索引
+        triangles_bottom[start:stop:2, 2] = ind3  # 设置第一个三角形的第三个顶点索引
+        triangles_bottom[start:stop:2, 1] = ind1  # 设置第一个三角形的第二个顶点索引
+        triangles_bottom[start + 1 : stop : 2, 0] = ind0  # 设置第二个三角形的第一个顶点索引
+        triangles_bottom[start + 1 : stop : 2, 2] = ind2  # 设置第二个三角形的第三个顶点索引
+        triangles_bottom[start + 1 : stop : 2, 1] = ind3  # 设置第二个三角形的第二个顶点索引
+    triangles_bottom += num_rows * num_cols  # 调整索引以匹配底部平面的顶点
 
     # 创建侧面的三角形
-    triangles_side_0 = np.zeros([2 * (num_rows - 1), 3], dtype=np.uint32)
+    triangles_side_0 = np.zeros([2 * (num_rows - 1), 3], dtype=np.uint32)  # 初始化第一个侧面的三角形数组
     for i in range(num_rows - 1):
-        ind0 = i * num_cols
-        ind1 = (i + 1) * num_cols
-        ind2 = ind0 + num_rows * num_cols
-        ind3 = ind1 + num_rows * num_cols
-        triangles_side_0[2 * i] = [ind0, ind2, ind1]
-        triangles_side_0[2 * i + 1] = [ind1, ind2, ind3]
+        ind0 = i * num_cols  # 计算当前行的第一个索引
+        ind1 = (i + 1) * num_cols  # 计算下一行的第一个索引
+        ind2 = ind0 + num_rows * num_cols  # 计算底部平面的对应索引
+        ind3 = ind1 + num_rows * num_cols  # 计算底部平面的对应索引
+        triangles_side_0[2 * i] = [ind0, ind2, ind1]  # 设置第一个三角形的顶点索引
+        triangles_side_0[2 * i + 1] = [ind1, ind2, ind3]  # 设置第二个三角形的顶点索引
 
-    triangles_side_1 = np.zeros([2 * (num_cols - 1), 3], dtype=np.uint32)
+    triangles_side_1 = np.zeros([2 * (num_cols - 1), 3], dtype=np.uint32)  # 初始化第二个侧面的三角形数组
     for i in range(num_cols - 1):
-        ind0 = i
-        ind1 = i + 1
-        ind2 = ind0 + num_rows * num_cols
-        ind3 = ind1 + num_rows * num_cols
-        triangles_side_1[2 * i] = [ind0, ind1, ind2]
-        triangles_side_1[2 * i + 1] = [ind1, ind3, ind2]
+        ind0 = i  # 计算当前列的第一个索引
+        ind1 = i + 1  # 计算下一列的第一个索引
+        ind2 = ind0 + num_rows * num_cols  # 计算底部平面的对应索引
+        ind3 = ind1 + num_rows * num_cols  # 计算底部平面的对应索引
+        triangles_side_1[2 * i] = [ind0, ind1, ind2]  # 设置第一个三角形的顶点索引
+        triangles_side_1[2 * i + 1] = [ind1, ind3, ind2]  # 设置第二个三角形的顶点索引
 
-    triangles_side_2 = np.zeros([2 * (num_rows - 1), 3], dtype=np.uint32)
+    triangles_side_2 = np.zeros([2 * (num_rows - 1), 3], dtype=np.uint32)  # 初始化第三个侧面的三角形数组
     for i in range(num_rows - 1):
-        ind0 = i * num_cols + num_cols - 1
-        ind1 = (i + 1) * num_cols + num_cols - 1
-        ind2 = ind0 + num_rows * num_cols
-        ind3 = ind1 + num_rows * num_cols
-        triangles_side_2[2 * i] = [ind0, ind1, ind2]
-        triangles_side_2[2 * i + 1] = [ind1, ind3, ind2]
+        ind0 = i * num_cols + num_cols - 1  # 计算当前行的最后一个索引
+        ind1 = (i + 1) * num_cols + num_cols - 1  # 计算下一行的最后一个索引
+        ind2 = ind0 + num_rows * num_cols  # 计算底部平面的对应索引
+        ind3 = ind1 + num_rows * num_cols  # 计算底部平面的对应索引
+        triangles_side_2[2 * i] = [ind0, ind1, ind2]  # 设置第一个三角形的顶点索引
+        triangles_side_2[2 * i + 1] = [ind1, ind3, ind2]  # 设置第二个三角形的顶点索引
 
-    triangles_side_3 = np.zeros([2 * (num_cols - 1), 3], dtype=np.uint32)
+    triangles_side_3 = np.zeros([2 * (num_cols - 1), 3], dtype=np.uint32)  # 初始化第四个侧面的三角形数组
     for i in range(num_cols - 1):
-        ind0 = i + (num_rows - 1) * num_cols
-        ind1 = i + 1 + (num_rows - 1) * num_cols
-        ind2 = ind0 + num_rows * num_cols
-        ind3 = ind1 + num_rows * num_cols
-        triangles_side_3[2 * i] = [ind0, ind2, ind1]
-        triangles_side_3[2 * i + 1] = [ind1, ind2, ind3]
+        ind0 = i + (num_rows - 1) * num_cols  # 计算最后一行的当前列索引
+        ind1 = i + 1 + (num_rows - 1) * num_cols  # 计算最后一行的下一列索引
+        ind2 = ind0 + num_rows * num_cols  # 计算底部平面的对应索引
+        ind3 = ind1 + num_rows * num_cols  # 计算底部平面的对应索引
+        triangles_side_3[2 * i] = [ind0, ind2, ind1]  # 设置第一个三角形的顶点索引
+        triangles_side_3[2 * i + 1] = [ind1, ind2, ind3]  # 设置第二个三角形的顶点索引
 
     # 合并所有顶点和三角形
-    vertices = np.concatenate([vertices_top, vertices_bottom], axis=0)
+    vertices = np.concatenate([vertices_top, vertices_bottom], axis=0)  # 合并顶部和底部平面的顶点
     triangles = np.concatenate(
         [triangles_top, triangles_bottom, triangles_side_0, triangles_side_1, triangles_side_2, triangles_side_3],
         axis=0,
-    )
+    )  # 合并所有三角形
 
     # 创建一个均匀分布的完整网格，用于更快的 SDF 生成
-    sdf_mesh = trimesh.Trimesh(vertices, triangles, process=False)
+    sdf_mesh = trimesh.Trimesh(vertices, triangles, process=False)  # 创建完整的网格对象
     
     # 创建一个简化后的网格，用于非 SDF 目的，以节省内存
-    mesh = sdf_mesh.simplify_quadric_decimation(face_count=0, maximum_error=0.0)
+    mesh = sdf_mesh.simplify_quadric_decimation(face_count=0, maximum_error=0.0)  # 简化网格
 
-    return mesh, sdf_mesh
+    return mesh, sdf_mesh  # 返回简化后的网格和完整的网格
 
 import torch
 
