@@ -14,7 +14,7 @@ def main():
     args = parser.parse_args()
 
     ########################## init ##########################
-    gs.init(seed=0, backend=gs.cpu if args.cpu else gs.gpu)
+    gs.init(backend=gs.cpu)
 
     ########################## create a scene ##########################
 
@@ -27,26 +27,24 @@ def main():
         show_viewer=args.vis,
         rigid_options=gs.options.RigidOptions(
             dt=0.01,
-            constraint_solver=gs.constraint_solver.Newton,
+            #constraint_solver=gs.constraint_solver.Newton,
         ),
         vis_options=gs.options.VisOptions(),
     )
 
-    horizontal_scale = 0.1
-    vertical_scale = 0.005
     ########################## entities ##########################
     terrain = scene.add_entity(
         morph=MultiScaleTerrain(
-            n_subterrains = (3, 10),
+            n_subterrains = (1, 3),
             subterrain_types=[
-                "flat_terrain", "pyramid_stairs_terrain", "pyramid_sloped_terrain"
+    "fractal_terrain",
             ],
             curriculum = True,
         ),
     )
     ########################## build ##########################
     scene.build(n_envs=1)
-
+    """
     height_field = terrain.geoms[0].metadata["height_field"]
     rows = horizontal_scale * torch.range(0, height_field.shape[0] - 1, 1, device="cuda").unsqueeze(1).repeat(
         1, height_field.shape[1]
@@ -58,8 +56,9 @@ def main():
 
     poss = torch.cat([rows, cols, heights], dim=-1).reshape(-1, 3)
     scene.draw_debug_spheres(poss=poss, radius=0.05, color=(0, 0, 1, 0.7))
-
+    """
     while True:
+        time.sleep(0.1)
         scene.step()
 
 

@@ -31,7 +31,7 @@ franka = scene.add_entity(
 
 # create 20 parallel environments
 B = 20
-scene.build(n_envs=B, env_spacing=(1.0, 1.0))
+scene.build(n_envs=B, env_spacing=(0.1, 1.0))
 
 # control all the robots
 franka.control_dofs_position(
@@ -43,5 +43,5 @@ franka.control_dofs_position(
 #     position = torch.zeros(3, 9, device=gs.device),
 #     envs_idx = torch.tensor([1, 5, 7], device=gs.device),
 # )
-for i in range(1000):
+while True:
     scene.step()

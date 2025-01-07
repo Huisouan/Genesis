@@ -26,42 +26,43 @@ from genesis.vis import Visualizer
 
 @gs.assert_initialized
 class Scene(RBC):
-    """
-    A ``genesis.Scene`` object wraps all components in a simulation environment, including a simulator (containing multiple physics solvers), entities, and a visualizer (controlling both the viewer and all the cameras).
-    Basically, everything happens inside a scene.
 
-    Parameters
+    """
+    `genesis.Scene` 对象封装了模拟环境中的所有组件，包括模拟器（包含多个物理求解器）、实体和可视化器（控制查看器和所有相机）。
+    基本上，所有操作都在场景中进行。
+
+    参数
     ----------
     sim_options : gs.options.SimOptions
-        The options configuring the overarching `simulator`, which in turn manages all the solvers.
+        配置总体 `模拟器` 的选项，该模拟器管理所有求解器。
     coupler_options : gs.options.CouplerOptions
-        The options configuring the `coupler` between different solvers.
+        配置不同求解器之间 `耦合器` 的选项。
     tool_options : gs.options.ToolOptions
-        The options configuring the tool_solver (``scene.sim.ToolSolver``).
+        配置工具求解器（``scene.sim.ToolSolver``）的选项。
     rigid_options : gs.options.RigidOptions
-        The options configuring the rigid_solver (``scene.sim.RigidSolver``).
+        配置刚体求解器（``scene.sim.RigidSolver``）的选项。
     avatar_options : gs.options.AvatarOptions
-        The options configuring the avatar_solver (``scene.sim.AvatarSolver``).
+        配置头像求解器（``scene.sim.AvatarSolver``）的选项。
     mpm_options : gs.options.MPMOptions
-        The options configuring the mpm_solver (``scene.sim.MPMSolver``).
+        配置 MPM 求解器（``scene.sim.MPMSolver``）的选项。
     sph_options : gs.options.SPHOptions
-        The options configuring the sph_solver (``scene.sim.SPHSolver``).
+        配置 SPH 求解器（``scene.sim.SPHSolver``）的选项。
     fem_options : gs.options.FEMOptions
-        The options configuring the fem_solver (``scene.sim.FEMSolver``).
+        配置 FEM 求解器（``scene.sim.FEMSolver``）的选项。
     sf_options : gs.options.SFOptions
-        The options configuring the sf_solver (``scene.sim.SFSolver``).
+        配置 SF 求解器（``scene.sim.SFSolver``）的选项。
     pbd_options : gs.options.PBDOptions
-        The options configuring the pbd_solver (``scene.sim.PBDSolver``).
+        配置 PBD 求解器（``scene.sim.PBDSolver``）的选项。
     vis_options : gs.options.VisOptions
-        The options configuring the visualization system (``scene.visualizer``). Visualizer controls both the interactive viewer and the cameras.
+        配置可视化系统（``scene.visualizer``）的选项。可视化器控制交互式查看器和所有相机。
     viewer_options : gs.options.ViewerOptions
-        The options configuring the viewer (``scene.visualizer.viewer``).
+        配置查看器（``scene.visualizer.viewer``）的选项。
     renderer : gs.renderers.Renderer
-        The renderer used by `camera` for rendering images. This doesn't affect the behavior of the interactive viewer.
+        用于 `相机` 渲染图像的渲染器。这不会影响交互式查看器的行为。
     show_viewer : bool
-        Whether to show the interactive viewer. Set it to False if you only need headless rendering.
+        是否显示交互式查看器。如果只需要无头渲染，请将其设置为 False。
     show_FPS : bool
-        Whether to show the FPS in the terminal.
+        是否在终端中显示 FPS。
     """
 
     def __init__(

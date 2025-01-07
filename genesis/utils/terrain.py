@@ -150,12 +150,18 @@ def parse_terrain(morph: Terrain, surface):
 
 def fractal_terrain(terrain, levels=8, scale=1.0):
     """
-    Generates a fractal terrain
+    生成分形地形
 
-    Parameters
-        terrain (SubTerrain): the terrain
-        levels (int, optional): granurarity of the fractal terrain. Defaults to 8.
-        scale (float, optional): scales vertical variation. Defaults to 1.0.
+    参数
+    ----------
+    terrain : SubTerrain
+        地形对象。
+
+    levels : int, 可选
+        分形地形的粒度。默认值为 8。
+
+    scale : float, 可选
+        垂直变化的缩放因子。默认值为 1.0。
     """
     width = terrain.width
     length = terrain.length

@@ -237,26 +237,26 @@ class Sphere(Primitive):
 
 class Plane(Primitive):
     """
-    Morph defined by a plane shape.
+    由平面形状定义的形变体。
 
-    Note
+    注意
     ----
-    Plane is a primitive with infinite size. Note that the `pos` is the center of the plane, but essetially only defines a point where the plane passes through.
+    平面是一个无限大小的原始形状。注意，`pos` 是平面通过的点的中心位置，但本质上只定义了一个点。
 
-    Parameters
+    参数
     ----------
-    pos : tuple, shape (3,), optional
-        The center position of the plane in meters. Defaults to (0.0, 0.0, 0.0).
-    euler : tuple, shape (3,), optional
-        The euler angle of the entity in degrees. This follows scipy's extrinsic x-y-z rotation convention. Defaults to (0.0, 0.0, 0.0).
-    quat : tuple, shape (4,), optional
-        The quaternion (w-x-y-z convention) of the entity. If specified, `euler` will be ignored. Defaults to None.
-    normal : tuple, shape (3,), optional
-        The normal normal of the plane in its local frame. Defaults to (0, 0, 1).
-    visualization : bool, optional
-        Whether the entity needs to be visualized. Set it to False if you need a invisible object only for collision purposes. Defaults to True. `visualization` and `collision` cannot both be False. **This is only used for RigidEntity.**
-    collision : bool, optional
-        Whether the entity needs to be considered for collision checking. Defaults to True. `visualization` and `collision` cannot both be False. **This is only used for RigidEntity.**
+    pos : tuple, 形状 (3,), 可选
+        平面在米中的中心位置。默认值为 (0.0, 0.0, 0.0)。
+    euler : tuple, 形状 (3,), 可选
+        实体的欧拉角（以度为单位）。这遵循 scipy 的外在 x-y-z 旋转约定。默认值为 (0.0, 0.0, 0.0)。
+    quat : tuple, 形状 (4,), 可选
+        实体的四元数（w-x-y-z 约定）。如果指定，则忽略 `euler`。默认值为 None。
+    normal : tuple, 形状 (3,), 可选
+        平面在其局部坐标系中的法向量。默认值为 (0, 0, 1)。
+    visualization : bool, 可选
+        实体是否需要可视化。如果只需要一个仅用于碰撞检测的不可见对象，请将其设置为 False。默认值为 True。`visualization` 和 `collision` 不能同时为 False。**仅用于 RigidEntity。**
+    collision : bool, 可选
+        实体是否需要考虑碰撞检测。默认值为 True。`visualization` 和 `collision` 不能同时为 False。**仅用于 RigidEntity。**
     """
 
     fixed: bool = True

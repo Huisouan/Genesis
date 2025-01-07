@@ -60,7 +60,7 @@ class MultiScaleTerrain(gs.morphs.Morph):
     randomize: bool = False  # whether to randomize the terrain
     n_subterrains: Tuple[int, int] = (3, 3)  # number of subterrains in x and y directions
     subterrain_size: Tuple[float, float] = (8,8)  # meter
-    horizontal_scale:float  = 0.1  # meter size of each cell in the subterrain
+    horizontal_scale:float  = 0.25  # meter size of each cell in the subterrain
     vertical_scale: float = 0.005   # meter height of each step in the subterrain
     subterrain_types: Any = [
         ["flat_terrain", "random_uniform_terrain", "stepping_stones_terrain"],
@@ -148,8 +148,6 @@ class MultiScaleTerrain(gs.morphs.Morph):
         ):
             gs.raise_exception("`subterrain_size` should be divisible by `horizontal_scale`.")
             
-
-
 
 
 def parse_terrain(morph: MultiScaleTerrain, surface):
