@@ -37,7 +37,7 @@ def main():
     ########################## entities ##########################
     terrain = scene.add_entity(
         morph=MultiScaleTerrain(
-            n_subterrains = (3, 3),
+            n_subterrains = (3, 10),
             subterrain_types=[
                 "flat_terrain", "pyramid_stairs_terrain", "pyramid_sloped_terrain"
             ],
