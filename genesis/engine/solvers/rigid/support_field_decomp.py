@@ -31,21 +31,31 @@ class SupportField:
 
     def _compute_support(self):
         v = self._get_direction_grid()
-        v1 = v.reshape([-1, 3])
+        v1 = v.reshape([-1, 3]).astype(np.float32)  # 使用 float32
         support_v = []
         support_vid = []
         support_cell_start = []
         start = 0
         if self.solver.n_geoms > 0:
 
-            init_pos = self.solver.verts_info.init_pos.to_numpy()
+            init_pos = self.solver.verts_info.init_pos.to_numpy().astype(np.float32)  # 使用 float32
             for i_g in range(self.solver.n_geoms):
                 vert_start = self.solver.geoms_info.vert_start[i_g]
                 vert_end = self.solver.geoms_info.vert_end[i_g]
                 this_pos = init_pos[vert_start:vert_end]
 
-                dot_products = v1.dot(this_pos.T)
-                max_indices = np.argmax(dot_products, axis=1)
+                chunk_size = 1000  # 根据内存情况调整
+                num_chunks = (this_pos.shape[0] + chunk_size - 1) // chunk_size
+
+                max_indices_chunk = []
+                for i in range(num_chunks):
+                    start_idx = i * chunk_size
+                    end_idx = min((i + 1) * chunk_size, this_pos.shape[0])
+                    chunk_pos = this_pos[start_idx:end_idx]
+                    dot_products = v1.dot(chunk_pos.T)
+                    max_indices_chunk.append(np.argmax(dot_products, axis=1))
+
+                max_indices = np.concatenate(max_indices_chunk)
                 support = this_pos[max_indices]
 
                 support_cell_start.append(start)

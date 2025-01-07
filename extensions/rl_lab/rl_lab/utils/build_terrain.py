@@ -527,7 +527,7 @@ def convert_heightfield_to_watertight_trimesh(height_field_raw, horizontal_scale
     init_time = time.time() 
     print(f"Terrain generation took {init_time-tri_time:.2f} seconds.")
     # 创建一个简化后的网格，用于非 SDF 目的，以节省内存
-    mesh = sdf_mesh.simplify_quadric_decimation(face_count = 0)
+    #mesh = sdf_mesh.simplify_quadric_decimation(face_count = 0)
     final_time = time.time() 
     print(f"Terrain simplify took {final_time-init_time:.2f} seconds.")
     return sdf_mesh, sdf_mesh  # 返回简化后的网格和完整的网格
