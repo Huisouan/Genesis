@@ -4,6 +4,9 @@ import pandas as pd
 import numpy as np
 
 import genesis as gs
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import threading
 
 class MotionRetarget:
     def __init__(self, mocap_file, urdf_file, name_list, point_names, joint_names, key_points, scale=1):
@@ -39,7 +42,8 @@ class MotionRetarget:
                 
                 self.csv_data_list.append({
                     'data': data,
-                    'header': header
+                    'header': header,
+                    'filename':filename,
                 })
 
     def calculate_baseqps(self):
@@ -81,7 +85,7 @@ class MotionRetarget:
                     unique_points.add(point_name)
                     
                     if self.key_points is not None and point_name in self.key_points:
-                        color = (0.8, 0.8, 0.8, 1)
+                        color = (0.8, 0.0, 0.0, 1)
                     else:
                         color = (0.5, 0.5, 0.5, 1)
                     
@@ -148,6 +152,81 @@ class MotionRetarget:
                         point_info['point'].set_pos(position)
 
                 self.scene.step()
+
+class TkinterUI:
+    def __init__(self, motion_retarget: MotionRetarget):
+        self.motion_retarget = motion_retarget
+        self.root = tk.Tk()
+        self.root.title("Motion Retargeting UI")
+        self.root.geometry("400x200")
+
+        self.dataset_var = tk.StringVar()
+        self.frame_var = tk.IntVar(value=0)
+
+        self.create_widgets()
+        self.root.mainloop()
+
+    def create_widgets(self):
+        # Dataset selection
+        tk.Label(self.root, text="Select Dataset:").pack(pady=5)
+        tk.Button(self.root, text="Browse", command=self.browse_dataset).pack(pady=5)
+
+        # Progress bar
+        tk.Label(self.root, text="Frame:").pack(pady=5)
+        self.progress = tk.Scale(self.root, from_=0, to=0, orient=tk.HORIZONTAL, variable=self.frame_var, command=self.update_frame)
+        self.progress.pack(pady=5)
+
+        # Play button
+        self.play_button = tk.Button(self.root, text="Play", command=self.play_animation)
+        self.play_button.pack(pady=5)
+
+    def browse_dataset(self):
+        folder_path = filedialog.askdirectory()
+        if folder_path:
+            self.motion_retarget.mocap_file = folder_path
+            self.motion_retarget.load_csv_files_from_folder()
+            if self.motion_retarget.csv_data_list:
+                self.progress.config(to=self.motion_retarget.csv_data_list[0]['data'].shape[0] - 1)
+                self.frame_var.set(0)
+                messagebox.showinfo("Success", "Dataset loaded successfully.")
+            else:
+                messagebox.showerror("Error", "No CSV files found in the selected folder.")
+
+    def update_frame(self, value):
+        self.frame_var.set(int(value))
+        self.update_scene(int(value))
+
+    def update_scene(self, frame):
+        if self.motion_retarget.csv_data_list:
+            csv_data = self.motion_retarget.csv_data_list[0]
+            frame_data = csv_data['data'].iloc[frame]
+            Base_qpos = self.motion_retarget.calculate_baseqps()
+
+            for point_info in self.motion_retarget.point_list:
+                point_name = point_info['name']
+                x_col = f"{point_name}.X"
+                y_col = f"{point_name}.Y"
+                z_col = f"{point_name}.Z"
+                
+                if x_col in frame_data and y_col in frame_data and z_col in frame_data:
+                    position = np.array([frame_data[x_col], frame_data[z_col], frame_data[y_col]])
+                    point_info['point'].set_pos(position)
+
+            self.motion_retarget.scene.step()
+
+    def play_animation(self):
+        def play():
+            for frame in range(self.frame_var.get(), self.progress.cget('to') + 1):
+                self.update_frame(frame)
+                self.root.update()
+                if not self.play_button.cget('text') == "Stop":
+                    break
+
+        if self.play_button.cget('text') == "Play":
+            self.play_button.config(text="Stop")
+            threading.Thread(target=play).start()
+        else:
+            self.play_button.config(text="Play")
 
 if __name__ == "__main__":
     motion_retarget = MotionRetarget(
@@ -243,4 +322,5 @@ if __name__ == "__main__":
         ],
         scale=0.008
     )
-    motion_retarget.run()
+    
+    ui = TkinterUI(motion_retarget)
