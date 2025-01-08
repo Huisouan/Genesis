@@ -55,7 +55,7 @@ def main():
         pos,
         dofs_idx,
     )
-    for i in range(1000):
+    for i in range(10000):
         scene.step()
 
 

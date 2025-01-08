@@ -8,7 +8,7 @@ import genesis as gs
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-v", "--vis", action="store_true", default=False)
+    parser.add_argument("-v", "--vis", action="store_true", default=True)
     args = parser.parse_args()
 
     ########################## init ##########################
@@ -75,7 +75,6 @@ def main():
         # In actual control applications, you should instead use robot.control_dofs_position() and scene.step()
         robot.set_qpos(q)
         scene.visualizer.update()
-
 
 if __name__ == "__main__":
     main()

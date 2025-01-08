@@ -7,7 +7,7 @@ import genesis as gs
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-v", "--vis", action="store_true", default=False)
+    parser.add_argument("-v", "--vis", action="store_true", default=True)
     args = parser.parse_args()
 
     ########################## init ##########################
@@ -70,7 +70,7 @@ def main():
     center = np.array([0.033, -0.01, 0.42])
     r1 = 0.05
 
-    for i in range(2000):
+    for i in range(20000):
         index_finger_pos = center + np.array([0, np.cos(i / 90 * np.pi) - 1.0, np.sin(i / 90 * np.pi) - 1.0]) * r1
 
         target_1.set_qpos(np.concatenate([index_finger_pos, target_quat]))

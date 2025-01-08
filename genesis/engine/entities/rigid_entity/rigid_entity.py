@@ -848,48 +848,47 @@ class RigidEntity(Entity):
         return_error=False,
     ):
         """
-        Compute inverse kinematics for  multiple target links.
+        计算多个目标链接的逆运动学。
 
-        Parameters
+        参数
         ----------
         links : list of RigidLink
-            List of links to be used as the end-effectors.
-        poss : list, optional
-            List of target positions. If empty, position error will not be considered. Defaults to None.
-        quats : list, optional
-            List of target orientations. If empty, orientation error will not be considered. Defaults to None.
-        init_qpos : array_like, shape (n_dofs,), optional
-            Initial qpos used for solving IK. If None, the current qpos will be used. Defaults to None.
-        respect_joint_limit : bool, optional
-            Whether to respect joint limits. Defaults to True.
-        max_samples : int, optional
-            Number of resample attempts. Defaults to 50.
-        max_solver_iters : int, optional
-            Maximum number of solver iterations per sample. Defaults to 20.
-        damping : float, optional
-            Damping for damped least squares. Defaults to 0.01.
-        pos_tol : float, optional
-            Position tolerance for normalized position error (in meter). Defaults to 1e-4.
-        rot_tol : float, optional
-            Rotation tolerance for normalized rotation vector error (in radian). Defaults to 1e-4.
-        pos_mask : list, shape (3,), optional
-            Mask for position error. Defaults to [True, True, True]. E.g.: If you only care about position along x and y, you can set it to [True, True, False].
-        rot_mask : list, shape (3,), optional
-            Mask for rotation axis alignment. Defaults to [True, True, True]. E.g.: If you only want the link's Z-axis to be aligned with the Z-axis in the given quat, you can set it to [False, False, True].
-        max_step_size : float, optional
-            Maximum step size in q space for each IK solver step. Defaults to 0.5.
-        dofs_idx_local : None | array_like, optional
-            The indices of the dofs to set. If None, all dofs will be set. Note that here this uses the local `q_idx`, not the scene-level one. Defaults to None. This is used to specify which dofs the IK is applied to.
-        return_error : bool, optional
-            Whether to return the final errorqpos. Defaults to False.
+            作为末端执行器使用的链接列表。
+        poss : list, 可选
+            目标位置列表。如果为空，则不会考虑位置误差。默认为 None。
+        quats : list, 可选
+            目标方向列表。如果为空，则不会考虑方向误差。默认为 None。
+        init_qpos : array_like, 形状 (n_dofs,), 可选
+            用于求解逆运动学的初始关节位置。如果为 None，则使用当前关节位置。默认为 None。
+        respect_joint_limit : bool, 可选
+            是否遵守关节限制。默认为 True。
+        max_samples : int, 可选
+            重新采样的尝试次数。默认为 50。
+        max_solver_iters : int, 可选
+            每次采样中求解器的最大迭代次数。默认为 20。
+        damping : float, 可选
+            阻尼最小二乘法的阻尼系数。默认为 0.01。
+        pos_tol : float, 可选
+            归一化位置误差的位置容差（以米为单位）。默认为 1e-4。
+        rot_tol : float, 可选
+            归一化旋转向量误差的旋转容差（以弧度为单位）。默认为 1e-4。
+        pos_mask : list, 形状 (3,), 可选
+            位置误差掩码。默认为 [True, True, True]。例如：如果您只关心 x 和 y 方向的位置，可以将其设置为 [True, True, False]。
+        rot_mask : list, 形状 (3,), 可选
+            旋转轴对齐掩码。默认为 [True, True, True]。例如：如果您只想让链接的 Z 轴与给定四元数的 Z 轴对齐，可以将其设置为 [False, False, True]。
+        max_step_size : float, 可选
+            每个逆运动学求解步骤在 q 空间中的最大步长。默认为 0.5。
+        dofs_idx_local : None | array_like, 可选
+            要设置的自由度索引。如果为 None，则设置所有自由度。请注意，这里使用的是本地 `q_idx`，而不是场景级别的索引。默认为 None。用于指定应用逆运动学的自由度。
+        return_error : bool, 可选
+            是否返回最终的误差 qpos。默认为 False。
 
-
-        Returns
+        返回
         -------
-        qpos : array_like, shape (n_dofs,) or (n_envs, n_dofs)
-            Solver qpos (joint positions).
-        (optional) error_pose : array_like, shape (6,) or (n_envs, 6)
-            Pose error for each target. The 6-vector is [err_pos_x, err_pos_y, err_pos_z, err_rot_x, err_rot_y, err_rot_z]. Only returned if `return_error` is True.
+        qpos : array_like, 形状 (n_dofs,) 或 (n_envs, n_dofs)
+            求解器的 qpos（关节位置）。
+        (可选) error_pose : array_like, 形状 (6,) 或 (n_envs, 6)
+            每个目标的姿态误差。6 维向量为 [err_pos_x, err_pos_y, err_pos_z, err_rot_x, err_rot_y, err_rot_z]。仅在 `return_error` 为 True 时返回。
         """
 
         if not self._requires_jac_and_IK:
