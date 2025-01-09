@@ -5,7 +5,7 @@ import numpy as np
 
 import genesis as gs
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import ttk
 import threading
 
 class MotionRetarget:
@@ -22,7 +22,13 @@ class MotionRetarget:
         self.target_dict = {}
         self.point_list = []
         self.robot = None
-
+        self.data_in_play = 0 # 正在播放的数据集的索引
+        self.frame_in_play = 0 # 正在播放的数据集的帧索引
+        self.start_frame = 0 
+        self.end_frame = 0
+        self.play = True
+        self.back = False
+        self.init()
     def load_csv_files_from_folder(self):
         """
         从指定文件夹中读取所有的 CSV 文件，并提取表头信息。
@@ -42,8 +48,9 @@ class MotionRetarget:
                 
                 self.csv_data_list.append({
                     'data': data,
+                    'length': data.shape[0],  # 添加数据长度
                     'header': header,
-                    'filename':filename,
+                    'filename': filename,
                 })
 
     def calculate_baseqps(self):
@@ -126,7 +133,28 @@ class MotionRetarget:
         self.add_points(self.csv_data_list[0])
         self.scene.build()
         self.scene.reset()
-    def run(self):
+
+    def play_frame(self,csv_data,row):
+        frame = csv_data['data'].iloc[row]
+        for point_info in self.point_list:
+            point_name = point_info['name']
+            x_col = f"{point_name}.X"
+            y_col = f"{point_name}.Y"
+            z_col = f"{point_name}.Z"
+            
+            if x_col in frame and y_col in frame and z_col in frame:
+                position = np.array([frame[x_col], frame[z_col], frame[y_col]])
+                point_info['point'].set_pos(position)
+        self.scene.step()
+
+    def set_color(self,points, color):
+        for point_info in self.point_list:
+            if point_info['name'] == points:
+                point_info['point'].surface.color = color
+
+
+        self.scene.step()
+    def init(self):
         self.load_csv_files_from_folder()
         parser = argparse.ArgumentParser()
         parser.add_argument("-v", "--vis", action="store_true", default=True)
@@ -135,98 +163,108 @@ class MotionRetarget:
         self.initialize_scene(args.vis)
 
         target_quat = np.array([1, 0, 0, 0])
+    def play_data(self):
+        while True:
+            if self.frame_in_play >= self.csv_data_list[self.data_in_play]['length'] or self.frame_in_play >= self.end_frame :
+                #循环播放一个文件
+                self.frame_in_play = self.start_frame
+            self.play_frame(self.csv_data_list[self.data_in_play],self.frame_in_play)
+            if self.play ==  True:
+                self.frame_in_play += 1
+            elif self.back == True:
+                self.frame_in_play -= 1 
 
-        for csv_data in self.csv_data_list:
-            for row in range(0, csv_data['data'].shape[0]):
-                frame = csv_data['data'].iloc[row]
-                Base_qpos = self.calculate_baseqps()
 
-                for point_info in self.point_list:
-                    point_name = point_info['name']
-                    x_col = f"{point_name}.X"
-                    y_col = f"{point_name}.Y"
-                    z_col = f"{point_name}.Z"
-                    
-                    if x_col in frame and y_col in frame and z_col in frame:
-                        position = np.array([frame[x_col], frame[z_col], frame[y_col]])
-                        point_info['point'].set_pos(position)
-
-                self.scene.step()
+    def IK(self):
+        self.motion_retarget.IK()
 
 class TkinterUI:
-    def __init__(self, motion_retarget: MotionRetarget):
-        self.motion_retarget = motion_retarget
-        self.root = tk.Tk()
-        self.root.title("Motion Retargeting UI")
-        self.root.geometry("400x200")
+    def __init__(self, master, motion_retarget: MotionRetarget):
+        self.master = master  # 设置主窗口
+        self.motion_retarget = motion_retarget  # 设置 MotionRetarget 实例
+        self.current_data_index = None  # 当前选中的数据集索引
+        self.current_frame = 0  # 当前帧索引
+        self.is_playing = False  # 播放状态标志
 
-        self.dataset_var = tk.StringVar()
-        self.frame_var = tk.IntVar(value=0)
+        self.master.title("Motion Retarget UI")  # 设置窗口标题
 
-        self.create_widgets()
-        self.root.mainloop()
+        self.data_buttons = []  # 存储数据按钮的列表
+        for i, data_info in enumerate(self.motion_retarget.csv_data_list):
+            button = ttk.Button(master, text=data_info['filename'], command=lambda i=i: self.load_data(i))  # 创建按钮，点击时加载数据
+            button.pack()  # 将按钮添加到窗口
+            self.data_buttons.append(button)  # 将按钮添加到列表中
 
-    def create_widgets(self):
-        # Dataset selection
-        tk.Label(self.root, text="Select Dataset:").pack(pady=5)
-        tk.Button(self.root, text="Browse", command=self.browse_dataset).pack(pady=5)
+        self.progress_var = tk.IntVar()  # 进度条变量
+        self.progress_bar = ttk.Progressbar(master, variable=self.progress_var, maximum=100)  # 创建进度条
+        self.progress_bar.pack()  # 将进度条添加到窗口
 
-        # Progress bar
-        tk.Label(self.root, text="Frame:").pack(pady=5)
-        self.progress = tk.Scale(self.root, from_=0, to=0, orient=tk.HORIZONTAL, variable=self.frame_var, command=self.update_frame)
-        self.progress.pack(pady=5)
+        self.frame_label = ttk.Label(master, text="Frame: 0")  # 创建帧标签
+        self.frame_label.pack()  # 将帧标签添加到窗口
 
-        # Play button
-        self.play_button = tk.Button(self.root, text="Play", command=self.play_animation)
-        self.play_button.pack(pady=5)
+        self.total_frames_label = ttk.Label(master, text="Total Frames: 0")  # 创建总帧数标签
+        self.total_frames_label.pack()  # 将总帧数标签添加到窗口
 
-    def browse_dataset(self):
-        folder_path = filedialog.askdirectory()
-        if folder_path:
-            self.motion_retarget.mocap_file = folder_path
-            self.motion_retarget.load_csv_files_from_folder()
-            if self.motion_retarget.csv_data_list:
-                self.progress.config(to=self.motion_retarget.csv_data_list[0]['data'].shape[0] - 1)
-                self.frame_var.set(0)
-                messagebox.showinfo("Success", "Dataset loaded successfully.")
-            else:
-                messagebox.showerror("Error", "No CSV files found in the selected folder.")
+        self.play_button = ttk.Button(master, text="Play", command=self.toggle_play)  # 创建播放/暂停按钮
+        self.play_button.pack()  # 将播放/暂停按钮添加到窗口
 
-    def update_frame(self, value):
-        self.frame_var.set(int(value))
-        self.update_scene(int(value))
+        self.start_frame_entry = ttk.Entry(master)  # 创建起始帧输入框
+        self.start_frame_entry.pack()  # 将起始帧输入框添加到窗口
+        self.start_frame_entry.insert(0, "0")  # 设置起始帧输入框的默认值为 0
 
-    def update_scene(self, frame):
-        if self.motion_retarget.csv_data_list:
-            csv_data = self.motion_retarget.csv_data_list[0]
-            frame_data = csv_data['data'].iloc[frame]
-            Base_qpos = self.motion_retarget.calculate_baseqps()
+        self.end_frame_entry = ttk.Entry(master)  # 创建结束帧输入框
+        self.end_frame_entry.pack()  # 将结束帧输入框添加到窗口
+        self.end_frame_entry.insert(0, "100")  # 设置结束帧输入框的默认值为 100
 
-            for point_info in self.motion_retarget.point_list:
-                point_name = point_info['name']
-                x_col = f"{point_name}.X"
-                y_col = f"{point_name}.Y"
-                z_col = f"{point_name}.Z"
-                
-                if x_col in frame_data and y_col in frame_data and z_col in frame_data:
-                    position = np.array([frame_data[x_col], frame_data[z_col], frame_data[y_col]])
-                    point_info['point'].set_pos(position)
+        self.frame_entry = ttk.Entry(master)  # 创建手动输入帧号的输入框
+        self.frame_entry.pack()  # 将输入框添加到窗口
 
-            self.motion_retarget.scene.step()
+        self.jump_button = ttk.Button(master, text="Jump to Frame", command=self.jump_to_frame)  # 创建跳转按钮
+        self.jump_button.pack()  # 将跳转按钮添加到窗口
 
-    def play_animation(self):
-        def play():
-            for frame in range(self.frame_var.get(), self.progress.cget('to') + 1):
-                self.update_frame(frame)
-                self.root.update()
-                if not self.play_button.cget('text') == "Stop":
-                    break
+        self.update_progress()  # 启动进度条更新循环
 
-        if self.play_button.cget('text') == "Play":
-            self.play_button.config(text="Stop")
-            threading.Thread(target=play).start()
+    def load_data(self, index):
+        self.current_data_index = index
+        self.current_frame = 0
+        data_info = self.motion_retarget.csv_data_list[index]
+        self.progress_var.set(0)
+        self.progress_bar['maximum'] = data_info['length']
+        self.frame_label.config(text=f"Frame: {self.current_frame}")
+        self.total_frames_label.config(text=f"Total Frames: {data_info['length']}")  # 更新总帧数标签
+        self.motion_retarget.data_in_play = index
+        self.motion_retarget.frame_in_play = 0
+        self.motion_retarget.start_frame = 0
+        self.motion_retarget.end_frame = data_info['length']
+
+
+    def toggle_play(self):
+        self.is_playing = not self.is_playing
+        if self.is_playing:
+            self.play_button.config(text="Pause")
+            self.motion_retarget.play = False
         else:
             self.play_button.config(text="Play")
+            self.motion_retarget.play = True
+
+    def update_progress(self):
+        if self.current_data_index is not None:
+            data_info = self.motion_retarget.csv_data_list[self.current_data_index]
+            self.current_frame = self.motion_retarget.frame_in_play
+            self.progress_var.set(self.current_frame)
+            self.frame_label.config(text=f"Frame: {self.current_frame}")
+            self.progress_bar['maximum'] = data_info['length']
+        self.master.after(100, self.update_progress)  # 每100毫秒更新一次
+
+    def jump_to_frame(self):
+        try:
+            frame_number = int(self.frame_entry.get())
+            if 0 <= frame_number < self.motion_retarget.csv_data_list[self.current_data_index]['length']:
+                self.motion_retarget.frame_in_play = frame_number
+                self.update_progress()
+            else:
+                tk.messagebox.showerror("Invalid Input", "Frame number out of range.")
+        except ValueError:
+            tk.messagebox.showerror("Invalid Input", "Please enter a valid frame number.")
 
 if __name__ == "__main__":
     motion_retarget = MotionRetarget(
@@ -322,5 +360,13 @@ if __name__ == "__main__":
         ],
         scale=0.008
     )
-    
-    ui = TkinterUI(motion_retarget)
+
+    root = tk.Tk()
+    ui = TkinterUI(root, motion_retarget)
+
+    # 启动数据播放线程
+    data_thread = threading.Thread(target=motion_retarget.play_data, args=())
+    data_thread.daemon = True  # 设置为守护线程，确保主线程结束时自动结束
+    data_thread.start()
+
+    root.mainloop()
