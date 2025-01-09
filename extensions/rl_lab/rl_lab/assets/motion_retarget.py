@@ -142,6 +142,7 @@ class MotionRetarget:
             gs.morphs.URDF(
                 file=self.urdf_file,
                 pos=(0, 0, 0.4),
+                merge_fixed_links = False
             ),
         )
         self.FL_link = self.robot.get_link("FL_calf")
