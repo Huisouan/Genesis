@@ -33,6 +33,7 @@ class MotionRetarget:
         self.play = True
         self.back = False
         self.init()
+        
     def load_csv_files_from_folder(self):
         """
         从指定文件夹中读取所有的 CSV 文件，并提取表头信息。
@@ -75,6 +76,16 @@ class MotionRetarget:
                 surface=gs.surfaces.Default(color=(1, 0.5, 0.5, 1)),
             )
             self.target_dict[target_name] = target
+
+    def set_axis(self):
+        self.base_pos = np.zeros((1, 3),  dtype=gs.tc_float)
+        self.base_quat = np.zeros((1, 4),  dtype=gs.tc_float)
+        self.base_pos[:] = self.robot.get_pos()
+        self.base_quat[:] = self.robot.get_quat()           
+        for name in self.name_list:
+ 
+            target_name = name + "_target"
+            self.target_dict[target_name].set_pos([0,0,0])        
 
     def add_points(self, csv_info):
         """
@@ -133,6 +144,12 @@ class MotionRetarget:
                 pos=(0, 0, 0.4),
             ),
         )
+        self.FL_link = self.robot.get_link("FL_calf")
+        self.FR_link = self.robot.get_link("FR_calf")
+        self.RL_link = self.robot.get_link('RL_calf')
+        self.RR_link = self.robot.get_link('RR_calf')
+        
+        
         self.add_axis()
         self.add_points(self.csv_data_list[0])
         self.scene.build()

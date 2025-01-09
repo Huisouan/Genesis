@@ -3610,54 +3610,66 @@ class URDF(URDFType):
 
     @staticmethod
     def load(file_obj):
-        """Load a URDF from a file.
+        """从文件加载 URDF。
 
-        Parameters
+        参数
         ----------
-        file_obj : str or file-like object
-            The file to load the URDF from. Should be the path to the
-            ``.urdf`` XML file. Any paths in the URDF should be specified
-            as relative paths to the ``.urdf`` file instead of as ROS
-            resources.
+        file_obj : str 或 类文件对象
+            要加载 URDF 的文件。应为 ``.urdf`` XML 文件的路径。
+            URDF 中的任何路径应指定为相对于 ``.urdf`` 文件的相对路径，而不是 ROS 资源。
 
-        Returns
+        返回
         -------
         urdf : :class:`.URDF`
-            The parsed URDF.
+            解析后的 URDF。
         """
+        # 检查 file_obj 是否为字符串类型（即文件路径）
         if isinstance(file_obj, six.string_types):
+            # 检查 file_obj 是否为有效的文件路径
             if os.path.isfile(file_obj):
+                # 创建一个 XML 解析器，移除注释和空白文本
                 parser = ET.XMLParser(remove_comments=True, remove_blank_text=True)
+                # 打开文件并读取内容
                 with open(file_obj, "r") as f:
                     file_str = f.read()
-                # version 0.0 cannot be parsed by lxml
+                # 版本 0.0 无法被 lxml 解析，因此将其移除
                 file_str = file_str.replace('<?xml version="0.0" ?>', "").encode()
+                # 解析 XML 内容
                 tree = ET.parse(io.BytesIO(file_str), parser=parser)
+                # 获取文件路径和文件名
                 path, _ = os.path.split(file_obj)
             else:
+                # 如果 file_obj 不是有效的文件路径，抛出 ValueError
                 raise ValueError("{} is not a file".format(file_obj))
         else:
+            # 如果 file_obj 不是字符串类型，假设它是一个类文件对象
+            # 创建一个 XML 解析器，移除注释和空白文本
             parser = ET.XMLParser(remove_comments=True, remove_blank_text=True)
+            # 解析类文件对象的内容
             tree = ET.parse(file_obj, parser=parser)
+            # 获取文件路径和文件名
             path, _ = os.path.split(file_obj.name)
 
+        # 获取 XML 树的根节点
         node = tree.getroot()
+        # 从根节点解析 URDF 并返回 URDF 对象
         return URDF._from_xml(node, path)
 
     def _validate_joints(self):
-        """Raise an exception of any joints are invalidly specified.
+        """如果任何关节无效地指定，则引发异常。
 
-        Checks for the following:
+        检查以下内容：
 
-        - Joint parents are valid link names.
-        - Joint children are valid link names that aren't the same as parent.
-        - Joint mimics have valid joint names that aren't the same joint.
+        - 关节的父链接名称是否有效。
+        - 关节的子链接名称是否有效且与父链接名称不同。
+        - 关节的模拟（mimic）是否具有有效的关节名称且与自身不同。
 
-        Returns
+        返回
         -------
         actuated_joints : list of :class:`.Joint`
-            The joints in the model that are independently controllable.
+            模型中独立可控的关节列表。
         """
+        
         actuated_joints = []
         for joint in self.joints:
             if joint.parent not in self._link_map:
