@@ -7,6 +7,10 @@ import genesis as gs
 import tkinter as tk
 from tkinter import ttk
 import threading
+import torch
+import torch.nn.functional as F
+from scipy.spatial.transform import Rotation as R
+
 
 class MotionRetarget:
     def __init__(self, mocap_file, urdf_file, name_list, point_names, joint_names, key_points, scale=1):
@@ -151,8 +155,6 @@ class MotionRetarget:
         for point_info in self.point_list:
             if point_info['name'] == points:
                 point_info['point'].surface.color = color
-
-
         self.scene.step()
     def init(self):
         self.load_csv_files_from_folder()
@@ -175,7 +177,62 @@ class MotionRetarget:
                 self.frame_in_play -= 1 
 
 
+    def calculate_root_state(self):
+        """
+        根据参考关节位置计算当前帧的根节点位置和旋转。
+        
+        返回:
+        - root_pos (np.ndarray): 计算得到的当前帧的根节点位置。
+        - root_rot (np.ndarray): 当前帧的根节点的四元数旋转表示。
+        """
+        # 获取当前帧数据
+        csv_data = self.csv_data_list[self.data_in_play]['data']
+        frame = csv_data.iloc[self.frame_in_play]
+
+        # 获取关键点位置
+        pelvis_pos = np.array([frame[f"Bip01.X"], frame[f"Bip01.Y"], frame[f"Bip01.Z"]], dtype=np.float64)
+        neck_pos = np.array([frame[f"b__Neck.X"], frame[f"b__Neck.Y"], frame[f"b__Neck.Z"]], dtype=np.float64)
+        left_shoulder_pos = np.array([frame[f"b_LeftArm.X"], frame[f"b_LeftArm.Y"], frame[f"b_LeftArm.Z"]], dtype=np.float64)
+        right_shoulder_pos = np.array([frame[f"b_RightArm.X"], frame[f"b_RightArm.Y"], frame[f"b_RightArm.Z"]], dtype=np.float64)
+        left_hip_pos = np.array([frame[f"b_LeftLegUpper.X"], frame[f"b_LeftLegUpper.Y"], frame[f"b_LeftLegUpper.Z"]], dtype=np.float64)
+        right_hip_pos = np.array([frame[f"b_RightLegUpper.X"], frame[f"b_RightLegUpper.Y"], frame[f"b_RightLegUpper.Z"]], dtype=np.float64)
+
+        # 计算前向方向
+        forward_dir = neck_pos - pelvis_pos
+        forward_dir = forward_dir / np.linalg.norm(forward_dir)
+
+        # 计算左右方向
+        delta_shoulder = left_shoulder_pos - right_shoulder_pos
+        delta_hip = left_hip_pos - right_hip_pos
+        dir_shoulder = delta_shoulder / np.linalg.norm(delta_shoulder)
+        dir_hip = delta_hip / np.linalg.norm(delta_hip)
+        left_dir = 0.5 * (dir_shoulder + dir_hip)
+
+        # 确保正交性
+        up_dir = np.cross(forward_dir, left_dir)
+        up_dir = up_dir / np.linalg.norm(up_dir)
+        left_dir = np.cross(up_dir, forward_dir)
+        left_dir = left_dir / np.linalg.norm(left_dir)
+
+        # 构造旋转矩阵并转换为四元数
+        rot_mat = np.column_stack([up_dir, forward_dir, left_dir])
+        rot = R.from_matrix(rot_mat)
+        quat1 = rot.as_quat()
+        y_quat = R.from_euler('y', -90, degrees=True).as_quat()
+        quat2 = (R.from_quat(y_quat) * R.from_quat(quat1)).as_quat()
+        x_quat = R.from_euler('x', 90, degrees=True).as_quat()
+        root_rot = (R.from_quat(x_quat) * R.from_quat(quat2)).as_quat()
+
+        # 归一化四元数
+        root_rot = root_rot / np.linalg.norm(root_rot)
+
+        # 计算根节点位置
+        root_pos = 0.25 * (left_shoulder_pos + right_shoulder_pos + left_hip_pos + right_hip_pos)
+
+        return root_pos, root_rot
+
     def IK(self):
+        
         self.motion_retarget.IK()
 
 
@@ -189,11 +246,34 @@ class TkinterUI:
 
         self.master.title("Motion Retarget UI")  # 设置窗口标题
 
+        # 创建一个框架来存放数据按钮
+        self.data_frame = ttk.Frame(master)
+        self.data_frame.pack(pady=10, side=tk.LEFT, fill=tk.Y)  # 将框架添加到窗口
+
         self.data_buttons = []  # 存储数据按钮的列表
         for i, data_info in enumerate(self.motion_retarget.csv_data_list):
-            button = ttk.Button(master, text=data_info['filename'], command=lambda i=i: self.load_data(i))  # 创建按钮，点击时加载数据
-            button.pack()  # 将按钮添加到窗口
+            button = ttk.Button(self.data_frame, text=data_info['filename'], command=lambda i=i: self.load_data(i))  # 创建按钮，点击时加载数据
+            button.pack(side=tk.TOP, fill=tk.X)  # 将按钮添加到框架中
             self.data_buttons.append(button)  # 将按钮添加到列表中
+
+        # 创建一个框架来存放球体按键
+        self.points_frame = ttk.Frame(master)
+        self.points_frame.pack(pady=10, side=tk.LEFT, fill=tk.Y)  # 将框架添加到窗口
+
+        self.point_buttons = {}  # 存储球体按键的字典
+        self.point_states = {}  # 存储球体按键的状态
+
+        # 创建球体按键
+        for point_info in self.motion_retarget.point_list:
+            point_name = point_info['name']
+            button = ttk.Button(self.points_frame, text=point_name, command=lambda name=point_name: self.toggle_point(name))
+            button.pack(side=tk.TOP, fill=tk.X)
+            self.point_buttons[point_name] = button
+            self.point_states[point_name] = False
+
+            # 根据 key_points 初始化按键状态
+            if point_name in self.motion_retarget.key_points:
+                self.toggle_point(point_name)
 
         self.progress_var = tk.IntVar()  # 进度条变量
         self.progress_bar = ttk.Progressbar(master, variable=self.progress_var, maximum=100)  # 创建进度条
@@ -237,7 +317,6 @@ class TkinterUI:
         self.motion_retarget.start_frame = 0
         self.motion_retarget.end_frame = data_info['length']
 
-
     def toggle_play(self):
         self.is_playing = not self.is_playing
         if self.is_playing:
@@ -267,10 +346,25 @@ class TkinterUI:
         except ValueError:
             tk.messagebox.showerror("Invalid Input", "Please enter a valid frame number.")
 
+    def toggle_point(self, point_name):
+        if self.point_states[point_name]:
+            color = (0.5, 0.5, 0.5, 1.0)  # 未选中时变为灰色
+            if point_name in self.motion_retarget.key_points:
+                self.motion_retarget.key_points.remove(point_name)
+        else:
+            color = (1.0, 0.0, 0.0, 1.0)  # 选中时变为红色
+            if point_name not in self.motion_retarget.key_points:
+                self.motion_retarget.key_points.append(point_name)
+        
+        self.point_states[point_name] = not self.point_states[point_name]
+        self.motion_retarget.set_color(point_name, color)
+
+
+
 if __name__ == "__main__":
     motion_retarget = MotionRetarget(
         mocap_file="datasets/lssp_keypoints",
-        urdf_file="urdf/shadow_hand/shadow_hand.urdf",
+        urdf_file="datasets/go2_description/urdf/go2_description.urdf",
         name_list=[
             "Base",
             "FR",
@@ -332,10 +426,10 @@ if __name__ == "__main__":
             "b_Head",
             "Dog_Jaw",
             "Dog_JawEnd",
-            "Bip01_HeadNub",
-            "Bip01_HeadNubEnd",
-            "Bip01_Footsteps",
-            "Bip01_FootstepsEnd"
+            #"Bip01_HeadNub",
+            #"Bip01_HeadNubEnd",
+            #"Bip01_Footsteps",
+            #"Bip01_FootstepsEnd"
         ],
         joint_names=[
             "FR_hip_joint",
@@ -358,6 +452,17 @@ if __name__ == "__main__":
             "b_RightArm",
             "b_LeftLegUpper",
             "b_RightLegUpper",
+            
+            "b_RightFinger",
+            "b__LeftFinger",
+            
+            #"b_LeftToe002",
+            #"b_RightToe002",        
+            #"b_LeftToe",
+            #"b_RightToe",
+            "b_LeftAnkle",
+            "b_RightAnkle",                        
+                                    
         ],
         scale=0.008
     )
