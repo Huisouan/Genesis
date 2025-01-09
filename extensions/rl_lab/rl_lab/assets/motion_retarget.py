@@ -178,6 +178,7 @@ class MotionRetarget:
     def IK(self):
         self.motion_retarget.IK()
 
+
 class TkinterUI:
     def __init__(self, master, motion_retarget: MotionRetarget):
         self.master = master  # 设置主窗口
