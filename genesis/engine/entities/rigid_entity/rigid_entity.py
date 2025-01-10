@@ -1722,8 +1722,9 @@ class RigidEntity(Entity):
             The indices of the environments. If None, all environments will be considered. Defaults to None.
         """
 
-        if self.base_link.is_fixed:
-            gs.logger.warning("Base link is fixed. Overriding base link pose.")
+        #if self.base_link.is_fixed:
+            
+            #gs.logger.warning("Base link is fixed. Overriding base link pose.")
 
         pos = torch.as_tensor(pos)
         if self._solver.n_envs == 0:
@@ -1753,8 +1754,8 @@ class RigidEntity(Entity):
             The indices of the environments. If None, all environments will be considered. Defaults to None.
         """
 
-        if self.base_link.is_fixed:
-            gs.logger.warning("Base link is fixed. Overriding base link pose.")
+        #if self.base_link.is_fixed:
+        #    gs.logger.warning("Base link is fixed. Overriding base link pose.")
 
         quat = torch.as_tensor(quat)
         if self._solver.n_envs == 0:

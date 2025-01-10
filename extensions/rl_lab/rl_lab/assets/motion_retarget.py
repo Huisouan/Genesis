@@ -10,8 +10,8 @@ import threading
 import torch
 import torch.nn.functional as F
 from scipy.spatial.transform import Rotation as R
-
-
+from rl_lab.assets.transformations import quaternion_from_matrix ,quaternion_multiply
+INIT_ROT = np.array([0, 0, 0, 1.0])
 class MotionRetarget:
     def __init__(self, mocap_file, urdf_file, name_list, point_names, joint_names, key_points, scale=1):
         self.mocap_file = mocap_file
@@ -33,7 +33,7 @@ class MotionRetarget:
         self.play = True
         self.back = False
         self.init()
-        
+
     def load_csv_files_from_folder(self):
         """
         从指定文件夹中读取所有的 CSV 文件，并提取表头信息。
@@ -51,12 +51,45 @@ class MotionRetarget:
                 
                 data = data * self.scale
                 
+                # 数据平滑处理
+                window_size = 5  # 移动平均窗口大小
+                data_smoothed = data.rolling(window=window_size, center=True).mean().fillna(method='bfill').fillna(method='ffill')
+                
+                # 检测和处理跳变
+                threshold = 0.1  # 跳变阈值
+                diff = data_smoothed.diff().abs()
+                jumps = (diff > threshold).any(axis=1)
+                
+                # 处理跳变帧
+                data_cleaned = data_smoothed.copy()
+                i = 1
+                while i < len(data_cleaned) - 1:
+                    if jumps[i]:
+                        # 找到连续跳变帧的开始和结束
+                        start_jump = i
+                        while i < len(data_cleaned) - 1 and jumps[i]:
+                            i += 1
+                        end_jump = i
+                        
+                        # 使用两侧帧的二次拟合来替代跳变帧
+                        if start_jump > 1 and end_jump < len(data_cleaned) - 2:
+                            x = np.array([start_jump-2, start_jump-1, end_jump+1, end_jump+2])
+                            for col in data_cleaned.columns:
+                                y = data_cleaned[col].iloc[x].values
+                                coefficients = np.polyfit(x, y, 2)
+                                poly = np.poly1d(coefficients)
+                                x_new = np.arange(start_jump, end_jump)
+                                y_new = poly(x_new)
+                                data_cleaned[col].iloc[start_jump:end_jump] = y_new
+                    i += 1
+                
                 self.csv_data_list.append({
-                    'data': data,
-                    'length': data.shape[0],  # 添加数据长度
+                    'data': data_cleaned,
+                    'length': data_cleaned.shape[0],  # 添加数据长度
                     'header': header,
                     'filename': filename,
                 })
+
 
     def calculate_baseqps(self):
         pass
@@ -71,7 +104,7 @@ class MotionRetarget:
             target = self.scene.add_entity(
                 gs.morphs.Mesh(
                     file="meshes/axis.obj",
-                    scale=0.05,
+                    scale=0.5,
                 ),
                 surface=gs.surfaces.Default(color=(1, 0.5, 0.5, 1)),
             )
@@ -142,13 +175,15 @@ class MotionRetarget:
             gs.morphs.URDF(
                 file=self.urdf_file,
                 pos=(0, 0, 0.4),
-                merge_fixed_links = False
+                merge_fixed_links = False,
+                fixed = True
             ),
         )
-        self.FL_link = self.robot.get_link("FL_calf")
-        self.FR_link = self.robot.get_link("FR_calf")
-        self.RL_link = self.robot.get_link('RL_calf')
-        self.RR_link = self.robot.get_link('RR_calf')
+        
+        self.FL_link = self.robot.get_link("FL_foot")
+        self.FR_link = self.robot.get_link("FR_foot")
+        self.RL_link = self.robot.get_link('RL_foot')
+        self.RR_link = self.robot.get_link('RR_foot')
         
         
         self.add_axis()
@@ -167,7 +202,7 @@ class MotionRetarget:
             if x_col in frame and y_col in frame and z_col in frame:
                 position = np.array([frame[x_col], frame[z_col], frame[y_col]])
                 point_info['point'].set_pos(position)
-        self.scene.step()
+
 
     def set_color(self,points, color):
         for point_info in self.point_list:
@@ -189,10 +224,15 @@ class MotionRetarget:
                 #循环播放一个文件
                 self.frame_in_play = self.start_frame
             self.play_frame(self.csv_data_list[self.data_in_play],self.frame_in_play)
+            qpos = self.IK()
+
+            
+            self.scene.step()            
             if self.play ==  True:
                 self.frame_in_play += 1
             elif self.back == True:
                 self.frame_in_play -= 1 
+
 
 
     def calculate_root_state(self):
@@ -207,13 +247,41 @@ class MotionRetarget:
         csv_data = self.csv_data_list[self.data_in_play]['data']
         frame = csv_data.iloc[self.frame_in_play]
 
+        # 定义关键点名称
+        key_point_names = [
+            "Bip01",
+            "b__Neck",
+            "b_LeftArm",
+            "b_RightArm",
+            "b_LeftLegUpper",
+            "b_RightLegUpper"
+        ]
+
+        # 初始化关键点位置字典
+        key_point_positions = {}
+
         # 获取关键点位置
-        pelvis_pos = np.array([frame[f"Bip01.X"], frame[f"Bip01.Y"], frame[f"Bip01.Z"]], dtype=np.float64)
-        neck_pos = np.array([frame[f"b__Neck.X"], frame[f"b__Neck.Y"], frame[f"b__Neck.Z"]], dtype=np.float64)
-        left_shoulder_pos = np.array([frame[f"b_LeftArm.X"], frame[f"b_LeftArm.Y"], frame[f"b_LeftArm.Z"]], dtype=np.float64)
-        right_shoulder_pos = np.array([frame[f"b_RightArm.X"], frame[f"b_RightArm.Y"], frame[f"b_RightArm.Z"]], dtype=np.float64)
-        left_hip_pos = np.array([frame[f"b_LeftLegUpper.X"], frame[f"b_LeftLegUpper.Y"], frame[f"b_LeftLegUpper.Z"]], dtype=np.float64)
-        right_hip_pos = np.array([frame[f"b_RightLegUpper.X"], frame[f"b_RightLegUpper.Y"], frame[f"b_RightLegUpper.Z"]], dtype=np.float64)
+        for point_name in key_point_names:
+            x_col = f"{point_name}.X"
+            y_col = f"{point_name}.Y"
+            z_col = f"{point_name}.Z"
+            
+            if x_col in frame and y_col in frame and z_col in frame:
+                position = np.array([frame[x_col], frame[z_col], frame[y_col]], dtype=np.float64)
+                key_point_positions[point_name] = position
+
+        # 确保所有关键点都存在
+        required_key_points = set(key_point_names)
+        if not required_key_points.issubset(key_point_positions.keys()):
+            raise ValueError("Required key points are not present in the current frame.")
+
+        # 提取关键点位置
+        pelvis_pos = key_point_positions["Bip01"]
+        neck_pos = key_point_positions["b__Neck"]
+        left_shoulder_pos = key_point_positions["b_LeftArm"]
+        right_shoulder_pos = key_point_positions["b_RightArm"]
+        left_hip_pos = key_point_positions["b_LeftLegUpper"]
+        right_hip_pos = key_point_positions["b_RightLegUpper"]
 
         # 计算前向方向
         forward_dir = neck_pos - pelvis_pos
@@ -227,31 +295,56 @@ class MotionRetarget:
         left_dir = 0.5 * (dir_shoulder + dir_hip)
 
         # 确保正交性
-        up_dir = np.cross(forward_dir, left_dir)
+        up_dir = np.cross(left_dir,forward_dir)
         up_dir = up_dir / np.linalg.norm(up_dir)
+        
+        
         left_dir = np.cross(up_dir, forward_dir)
+        #left_dir[2] = 0.0  # make the base more stable
         left_dir = left_dir / np.linalg.norm(left_dir)
 
-        # 构造旋转矩阵并转换为四元数
-        rot_mat = np.column_stack([up_dir, forward_dir, left_dir])
-        rot = R.from_matrix(rot_mat)
-        quat1 = rot.as_quat()
-        y_quat = R.from_euler('y', -90, degrees=True).as_quat()
-        quat2 = (R.from_quat(y_quat) * R.from_quat(quat1)).as_quat()
-        x_quat = R.from_euler('x', 90, degrees=True).as_quat()
-        root_rot = (R.from_quat(x_quat) * R.from_quat(quat2)).as_quat()
 
-        # 归一化四元数
-        root_rot = root_rot / np.linalg.norm(root_rot)
+        rot_mat = np.array(
+            [
+                [forward_dir[0], left_dir[0], up_dir[0], 0],
+                [forward_dir[1], left_dir[1], up_dir[1], 0],
+                [forward_dir[2], left_dir[2], up_dir[2], 0],
+                [0, 0, 0, 1],
+            ]
+        )
 
-        # 计算根节点位置
+        #root_pos = 0.5 * (pelvis_pos + neck_pos)
         root_pos = 0.25 * (left_shoulder_pos + right_shoulder_pos + left_hip_pos + right_hip_pos)
-
+        root_rot = quaternion_from_matrix(rot_mat)
+        #root_rot = quaternion_multiply(root_rot, INIT_ROT)
+        root_rot = root_rot / np.linalg.norm(root_rot)
+        
+        # 将 root_rot 的最后一列放到第一列
+        root_rot = np.roll(root_rot, 1)
         return root_pos, root_rot
 
     def IK(self):
-        
-        self.motion_retarget.IK()
+        root_pos, root_rot = self.calculate_root_state()
+        self.target_dict['Base_target'].set_pos(root_pos)
+        self.target_dict['Base_target'].set_quat(root_rot)
+        self.robot.set_pos(root_pos)
+        self.robot.set_quat(root_rot)
+        for point in self.point_list:
+            if point["name"] == "b_RightAnkle":
+                RLF_target = point['point'].get_pos()
+            if point["name"] == "b_LeftAnkle":
+                RRF_target = point['point'].get_pos()
+            if point["name"] == "b_RightFinger":
+                FLF_target = point['point'].get_pos()
+            if point["name"] == "b__LeftFinger":
+                FRF_target = point['point'].get_pos()
+
+        qpos = self.robot.inverse_kinematics_multilink(
+            links=[self.FL_link,self.FR_link,self.RL_link,self.RR_link],  # 指定需要控制的链接
+            poss=[FLF_target,FRF_target,RLF_target,RRF_target],  # 指定目标位置
+        ) 
+        self.robot.set_qpos(qpos)
+        return qpos   
 
 
 class TkinterUI:
@@ -474,15 +567,11 @@ if __name__ == "__main__":
             "b_RightFinger",
             "b__LeftFinger",
             
-            #"b_LeftToe002",
-            #"b_RightToe002",        
-            #"b_LeftToe",
-            #"b_RightToe",
             "b_LeftAnkle",
             "b_RightAnkle",                        
                                     
         ],
-        scale=0.008
+        scale=0.007
     )
 
     root = tk.Tk()
