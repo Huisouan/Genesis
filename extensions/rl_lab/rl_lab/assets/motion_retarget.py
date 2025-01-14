@@ -199,9 +199,7 @@ class MotionRetarget:
         self.RL_sholder = self.robot.get_link('RL_calf_rotor').idx_local
         self.RR_sholder = self.robot.get_link('RR_calf_rotor').idx_local
         
-        
-        
-        
+
         self.add_axis()
         self.add_points(self.csv_data_list[0])
         self.scene.build()
@@ -423,19 +421,20 @@ class MotionRetarget:
         RLF_target = delta_RL + pos[self.RL_sholder]
         RRF_target = delta_RR + pos[self.RR_sholder]
                  
-            
+        
+
 
         qpos = self.robot.inverse_kinematics_multilink(
             links=[self.FL_link, self.FR_link, self.RL_link, self.RR_link],  # 指定需要控制的链接
             poss=[FLF_target, FRF_target, RLF_target, RRF_target],  # 指定目标位置
         ) 
         self.robot.set_qpos(qpos)
+        
+        
+        
         return qpos
 
 class TkinterUI:
-    
-    
-    
     def __init__(self, master, motion_retarget: MotionRetarget):
         self.master = master  # 设置主窗口
         self.motion_retarget = motion_retarget  # 设置 MotionRetarget 实例
@@ -491,9 +490,15 @@ class TkinterUI:
         self.start_frame_entry.pack()  # 将起始帧输入框添加到窗口
         self.start_frame_entry.insert(0, "0")  # 设置起始帧输入框的默认值为 0
 
+        self.set_start_frame_button = ttk.Button(master, text="Set Start Frame", command=self.set_start_frame)  # 创建设置起始帧按钮
+        self.set_start_frame_button.pack()  # 将设置起始帧按钮添加到窗口
+
         self.end_frame_entry = ttk.Entry(master)  # 创建结束帧输入框
         self.end_frame_entry.pack()  # 将结束帧输入框添加到窗口
         self.end_frame_entry.insert(0, "100")  # 设置结束帧输入框的默认值为 100
+
+        self.set_end_frame_button = ttk.Button(master, text="Set End Frame", command=self.set_end_frame)  # 创建设置结束帧按钮
+        self.set_end_frame_button.pack()  # 将设置结束帧按钮添加到窗口
 
         self.frame_entry = ttk.Entry(master)  # 创建手动输入帧号的输入框
         self.frame_entry.pack()  # 将输入框添加到窗口
@@ -558,7 +563,25 @@ class TkinterUI:
         self.point_states[point_name] = not self.point_states[point_name]
         self.motion_retarget.set_color(point_name, color)
 
+    def set_start_frame(self):
+        try:
+            start_frame = int(self.start_frame_entry.get())
+            if 0 <= start_frame < self.motion_retarget.csv_data_list[self.current_data_index]['length']:
+                self.motion_retarget.start_frame = start_frame
+            else:
+                tk.messagebox.showerror("Invalid Input", "Start frame number out of range.")
+        except ValueError:
+            tk.messagebox.showerror("Invalid Input", "Please enter a valid start frame number.")
 
+    def set_end_frame(self):
+        try:
+            end_frame = int(self.end_frame_entry.get())
+            if 0 <= end_frame < self.motion_retarget.csv_data_list[self.current_data_index]['length']:
+                self.motion_retarget.end_frame = end_frame
+            else:
+                tk.messagebox.showerror("Invalid Input", "End frame number out of range.")
+        except ValueError:
+            tk.messagebox.showerror("Invalid Input", "Please enter a valid end frame number.")
 
 if __name__ == "__main__":
     motion_retarget = MotionRetarget(
