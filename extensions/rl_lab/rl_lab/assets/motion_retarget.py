@@ -13,7 +13,7 @@ from scipy.spatial.transform import Rotation as R
 from rl_lab.assets.transformations import quaternion_from_matrix ,quaternion_multiply
 INIT_ROT = np.array([0, 0, 0, 1.0])
 class MotionRetarget:
-    def __init__(self, mocap_file, urdf_file, name_list, point_names, joint_names, key_points, scale=1):
+    def __init__(self, mocap_file, urdf_file, name_list, point_names, joint_names, key_points, scale=[1,1,1]):
         self.mocap_file = mocap_file
         self.urdf_file = urdf_file
         self.name_list = name_list
@@ -49,7 +49,16 @@ class MotionRetarget:
                     data = data[filtered_header]
                     header = filtered_header
                 
-                data = data * self.scale
+                for point_name in self.point_names:
+                        x_col = f"{point_name}.X"
+                        y_col = f"{point_name}.Y"
+                        z_col = f"{point_name}.Z"
+                        
+                        if x_col in data.columns and y_col in data.columns and z_col in data.columns:
+                            # 应用缩放系数
+                            data[x_col] *= self.scale[0]
+                            data[y_col] *= self.scale[1]
+                            data[z_col] *= self.scale[2]
                 
                 # 数据平滑处理
                 window_size = 5  # 移动平均窗口大小
@@ -185,6 +194,13 @@ class MotionRetarget:
         self.RL_link = self.robot.get_link('RL_foot')
         self.RR_link = self.robot.get_link('RR_foot')
         
+        self.FL_sholder = self.robot.get_link('FL_calf_rotor').idx_local
+        self.FR_sholder = self.robot.get_link('FR_calf_rotor').idx_local
+        self.RL_sholder = self.robot.get_link('RL_calf_rotor').idx_local
+        self.RR_sholder = self.robot.get_link('RR_calf_rotor').idx_local
+        
+        
+        
         
         self.add_axis()
         self.add_points(self.csv_data_list[0])
@@ -303,7 +319,6 @@ class MotionRetarget:
         #left_dir[2] = 0.0  # make the base more stable
         left_dir = left_dir / np.linalg.norm(left_dir)
 
-
         rot_mat = np.array(
             [
                 [forward_dir[0], left_dir[0], up_dir[0], 0],
@@ -322,13 +337,62 @@ class MotionRetarget:
         # 将 root_rot 的最后一列放到第一列
         root_rot = np.roll(root_rot, 1)
         return root_pos, root_rot
+    def offset(self, root_rot, point_name, offset_amount):
+        """
+        根据局部坐标系下的偏移量对指定点进行偏移。
 
+        参数:
+        - root_pos (np.ndarray): 根节点的位置。
+        - root_rot (np.ndarray): 根节点的四元数旋转表示。
+        - point_name (str): 要偏移的点的名称。
+        - offset_amount (np.ndarray): 局部坐标系下的偏移量。
+        """
+        # 检查点是否存在
+        point_info = next((p for p in self.point_list if p['name'] == point_name), None)
+        if point_info is None:
+            print(f"Point {point_name} not found.")
+            return
+
+        # 获取点的当前位置
+        current_pos = point_info['point'].get_pos()
+
+        # 确保 current_pos 是 numpy.ndarray
+        if isinstance(current_pos, torch.Tensor):
+            current_pos = current_pos.cpu().numpy()
+
+        # 将偏移量从局部坐标系转换到全局坐标系
+        rotation_matrix = R.from_quat(root_rot).as_matrix()
+        # 将 offset_amount 从 torch.Tensor 转换为 numpy.ndarray
+        # 首先将 tensor 从 CUDA 设备复制到 CPU 内存
+        offset_amount_np = offset_amount.cpu().numpy()
+        global_offset = rotation_matrix @ offset_amount_np
+
+        # 计算新的位置
+        new_pos = current_pos + global_offset
+        
+        # 设置点的新位置
+        point_info['point'].set_pos(new_pos)
     def IK(self):
         root_pos, root_rot = self.calculate_root_state()
         self.target_dict['Base_target'].set_pos(root_pos)
         self.target_dict['Base_target'].set_quat(root_rot)
+        
         self.robot.set_pos(root_pos)
         self.robot.set_quat(root_rot)
+        #self.scene.step()   
+        
+        pos = self.robot.get_links_pos()
+        quat = self.robot.get_links_quat()
+        """
+        self.target_dict['FL_target'].set_pos(pos[self.FL_sholder])
+        self.target_dict['FR_target'].set_pos(pos[self.FR_sholder])
+        self.target_dict['RL_target'].set_pos(pos[self.RL_sholder])
+        self.target_dict['RR_target'].set_pos(pos[self.RR_sholder])
+        self.target_dict['FL_target'].set_quat(quat[self.FL_sholder])
+        self.target_dict['FR_target'].set_quat(quat[self.FR_sholder])
+        self.target_dict['RL_target'].set_quat(quat[self.RL_sholder])
+        self.target_dict['RR_target'].set_quat(quat[self.RR_sholder])
+        """
         for point in self.point_list:
             if point["name"] == "b_RightAnkle":
                 RLF_target = point['point'].get_pos()
@@ -338,16 +402,40 @@ class MotionRetarget:
                 FLF_target = point['point'].get_pos()
             if point["name"] == "b__LeftFinger":
                 FRF_target = point['point'].get_pos()
+                
+            if point["name"] == "b_RightLegUpper":
+                RLS_target = point['point'].get_pos()
+            if point["name"] == "b_LeftLegUpper":
+                RRS_target = point['point'].get_pos()
+            if point["name"] == "b_RightArm":
+                FLS_target = point['point'].get_pos()
+            if point["name"] == "b_LeftArm":
+                FRS_target = point['point'].get_pos()
+                
+                
+        delta_FR = FRF_target - FRS_target
+        delta_FL = FLF_target - FLS_target
+        delta_RR = RRF_target - RRS_target
+        delta_RL = RLF_target - RLS_target
+        
+        FLF_target = delta_FL + pos[self.FL_sholder]
+        FRS_target = delta_FR + pos[self.FR_sholder]
+        RLF_target = delta_RL + pos[self.RL_sholder]
+        RRF_target = delta_RR + pos[self.RR_sholder]
+                 
+            
 
         qpos = self.robot.inverse_kinematics_multilink(
-            links=[self.FL_link,self.FR_link,self.RL_link,self.RR_link],  # 指定需要控制的链接
-            poss=[FLF_target,FRF_target,RLF_target,RRF_target],  # 指定目标位置
+            links=[self.FL_link, self.FR_link, self.RL_link, self.RR_link],  # 指定需要控制的链接
+            poss=[FLF_target, FRF_target, RLF_target, RRF_target],  # 指定目标位置
         ) 
         self.robot.set_qpos(qpos)
-        return qpos   
-
+        return qpos
 
 class TkinterUI:
+    
+    
+    
     def __init__(self, master, motion_retarget: MotionRetarget):
         self.master = master  # 设置主窗口
         self.motion_retarget = motion_retarget  # 设置 MotionRetarget 实例
@@ -571,7 +659,7 @@ if __name__ == "__main__":
             "b_RightAnkle",                        
                                     
         ],
-        scale=0.007
+        scale=[0.007,0.007,0.007]
     )
 
     root = tk.Tk()
