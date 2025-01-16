@@ -199,6 +199,13 @@ class MotionRetarget:
         self.RL_sholder = self.robot.get_link('RL_calf_rotor').idx_local
         self.RR_sholder = self.robot.get_link('RR_calf_rotor').idx_local
         
+        self.FL_thigh = self.robot.get_link('FL_calf').idx_local
+        self.FR_thigh = self.robot.get_link('FR_calf').idx_local
+        self.RL_thigh = self.robot.get_link('RL_calf').idx_local
+        self.RR_thigh = self.robot.get_link('RR_calf').idx_local
+        
+        
+        
 
         self.add_axis()
         self.add_points(self.csv_data_list[0])
@@ -240,14 +247,15 @@ class MotionRetarget:
             self.play_frame(self.csv_data_list[self.data_in_play],self.frame_in_play)
             qpos = self.IK()
 
-            
             self.scene.step()            
             if self.play ==  True:
                 self.frame_in_play += 1
             elif self.back == True:
                 self.frame_in_play -= 1 
 
-
+    def collect_data(self,root_pos,root_rot,qpos):
+        
+        pass
 
     def calculate_root_state(self):
         """
@@ -381,16 +389,16 @@ class MotionRetarget:
         
         pos = self.robot.get_links_pos()
         quat = self.robot.get_links_quat()
-        """
-        self.target_dict['FL_target'].set_pos(pos[self.FL_sholder])
-        self.target_dict['FR_target'].set_pos(pos[self.FR_sholder])
-        self.target_dict['RL_target'].set_pos(pos[self.RL_sholder])
-        self.target_dict['RR_target'].set_pos(pos[self.RR_sholder])
-        self.target_dict['FL_target'].set_quat(quat[self.FL_sholder])
-        self.target_dict['FR_target'].set_quat(quat[self.FR_sholder])
-        self.target_dict['RL_target'].set_quat(quat[self.RL_sholder])
-        self.target_dict['RR_target'].set_quat(quat[self.RR_sholder])
-        """
+
+        self.target_dict['FL_target'].set_pos(pos[self.FL_thigh])
+        self.target_dict['FR_target'].set_pos(pos[self.FR_thigh])
+        self.target_dict['RL_target'].set_pos(pos[self.RL_thigh])
+        self.target_dict['RR_target'].set_pos(pos[self.RR_thigh])
+        self.target_dict['FL_target'].set_quat(quat[self.FL_thigh])
+        self.target_dict['FR_target'].set_quat(quat[self.FR_thigh])
+        self.target_dict['RL_target'].set_quat(quat[self.RL_thigh])
+        self.target_dict['RR_target'].set_quat(quat[self.RR_thigh])
+
         for point in self.point_list:
             if point["name"] == "b_RightAnkle":
                 RLF_target = point['point'].get_pos()

@@ -6,7 +6,6 @@ import genesis as gs
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-v", "--vis", action="store_true", default=False)
     parser.add_argument("-c", "--cpu", action="store_true", default=False)
     args = parser.parse_args()
 
@@ -20,7 +19,7 @@ def main():
             camera_lookat=(0.0, 0.0, 0.5),
             camera_fov=40,
         ),
-        show_viewer=args.vis,
+        show_viewer=True,
         rigid_options=gs.options.RigidOptions(
             # constraint_solver=gs.constraint_solver.Newton,
         ),
@@ -30,11 +29,12 @@ def main():
     plane = scene.add_entity(
         gs.morphs.Plane(),
     )
-    franka = scene.add_entity(
-        gs.morphs.MJCF(file="xml/franka_emika_panda/panda.xml"),
-        visualize_contact=True,
-    )
-
+    robot = scene.add_entity(
+            gs.morphs.URDF(
+                file="datasets/go2_description/urdf/go2_description.urdf",
+                pos=(0, 0, 0.4),
+            ),
+        )
     ########################## cameras ##########################
     cam_0 = scene.add_camera(
         res=(1280, 960),
