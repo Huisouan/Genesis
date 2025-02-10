@@ -2464,10 +2464,10 @@ class Trimesh(Geometry3D):
         )
         return self.simplify_quadric_decimation(*args, **kwargs)
 
-    def simplify_quadric_decimation(self, face_count, maximum_error=np.inf, boundary_weight=1.0):
+    def simplify_quadric_decimation(self, face_count, lossless=False):
         """
-        这是对 `open3d` 实现的薄封装：
-        `open3d.geometry.TriangleMesh.simplify_quadric_decimation`
+        A thin wrapper around the `fast_simplification` implementation of this:
+        `fast_simplification.simplify`
 
         参数
         ----------
@@ -2479,10 +2479,12 @@ class Trimesh(Geometry3D):
         simple : trimesh.Trimesh
           简化后的网格。
         """
-        simple = self.as_open3d.simplify_quadric_decimation(
-            int(face_count), float(maximum_error), float(boundary_weight)
+        from genesis.ext import fast_simplification
+
+        vertices, faces, collapses = fast_simplification.simplify(
+            self.vertices, self.faces, target_count=face_count, lossless=lossless, return_collapses=True
         )
-        return Trimesh(vertices=simple.vertices, faces=simple.triangles)
+        return Trimesh(vertices=vertices, faces=faces)
 
     def outline(self, face_ids=None, **kwargs):
         """

@@ -54,6 +54,8 @@ def main():
             horizontal_scale=horizontal_scale,
             vertical_scale=vertical_scale,
             height_field=height_field,
+            name="example",
+            # from_stored=True,
         ),
     )
 
