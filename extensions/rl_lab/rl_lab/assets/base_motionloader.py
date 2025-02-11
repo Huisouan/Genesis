@@ -56,7 +56,7 @@ class MotionData_Base:
         
         #self.data_reordering()
         #从original_data_tensors进行插值，让离散数据的时间间隔与env_step_duration一致，并保存到data_tensors
-        self.data_discretization()
+        #self.data_discretization()
         #self.re_calculate_velocity()
         print('Motion Data Loaded Successfully')
 
@@ -80,6 +80,17 @@ class MotionData_Base:
                 'foot_pos': 12,
                 'foot_vel': 12,
             }
+        if self.datatype == "genesis":
+            self.data_spaces = {
+                'root_pos': 3,
+                'root_quat': 4,
+                'root_lin_vel': 3,
+                'root_ang_vel': 3,
+                'joint_pos': 12,
+                'joint_vel': 12,
+                'foot_pos': 12,
+            }
+
 
     def data_reordering(self):
         """

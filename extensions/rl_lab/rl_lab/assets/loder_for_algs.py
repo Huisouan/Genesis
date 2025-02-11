@@ -1,6 +1,8 @@
 from .base_motionloader import MotionData_Base
 import torch
 import time
+
+#AmpMotion目前无法使用，因为数据集的数据格式不符合要求
 class AmpMotion(MotionData_Base):
     def __init__(self, 
                  data_dir,
@@ -89,14 +91,17 @@ class AmpMotion(MotionData_Base):
 
             yield s, s_next
 
+
 class VQVAEMotion(MotionData_Base):
     def __init__(self, 
                  data_dir,
-                 datatype="isaaclab",
-                 file_type="txt",
+                 datatype="genesis",
+                 file_type="csv",
                  data_spaces = None,
                  env_step_duration = 0.005,**kwargs):
         super().__init__(data_dir,datatype,file_type,data_spaces,env_step_duration,**kwargs)
+        
+        
         
         def prepare_vqvae_state_trans():
             

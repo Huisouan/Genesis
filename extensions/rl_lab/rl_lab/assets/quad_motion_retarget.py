@@ -2,7 +2,7 @@ import argparse
 import os
 import pandas as pd
 import numpy as np
-
+import csv
 import genesis as gs
 import tkinter as tk
 from tkinter import ttk
@@ -11,6 +11,8 @@ import torch
 import torch.nn.functional as F
 from scipy.spatial.transform import Rotation as R
 from rl_lab.assets.transformations import quaternion_from_matrix ,quaternion_multiply
+from scipy.signal import butter, lfilter
+
 INIT_ROT = np.array([0, 0, 0, 1.0])
 class MotionRetarget:
     def __init__(self, mocap_file, urdf_file, name_list, point_names, joint_names, key_points, scale=[1,1,1]):
@@ -32,6 +34,8 @@ class MotionRetarget:
         self.end_frame = 0
         self.play = True
         self.back = False
+        self.record = False
+        self.record_stack = []
         self.init()
 
     def load_csv_files_from_folder(self):
@@ -184,8 +188,11 @@ class MotionRetarget:
             gs.morphs.URDF(
                 file=self.urdf_file,
                 pos=(0, 0, 0.4),
-                merge_fixed_links = False,
+                merge_fixed_links = True,
+                links_to_keep = ['FL_calf_rotor', 'FR_calf_rotor', 'RL_calf_rotor', 'RR_calf_rotor',
+                                 'FL_foot', 'FR_foot', 'RL_foot', 'RR_foot'],
                 fixed = True
+                
             ),
         )
         
@@ -239,23 +246,150 @@ class MotionRetarget:
         self.initialize_scene(args.vis)
 
         target_quat = np.array([1, 0, 0, 0])
-    def play_data(self):
-        while True:
-            if self.frame_in_play >= self.csv_data_list[self.data_in_play]['length'] or self.frame_in_play >= self.end_frame :
-                #循环播放一个文件
-                self.frame_in_play = self.start_frame
-            self.play_frame(self.csv_data_list[self.data_in_play],self.frame_in_play)
-            qpos = self.IK()
-
-            self.scene.step()            
-            if self.play ==  True:
-                self.frame_in_play += 1
-            elif self.back == True:
-                self.frame_in_play -= 1 
-
-    def collect_data(self,root_pos,root_rot,qpos):
         
-        pass
+    def play_data(self):
+        prev_root_pos = None
+        prev_root_rot = None
+        prev_qpos = None
+
+        while True:
+            if self.frame_in_play >= self.csv_data_list[self.data_in_play]['length'] or self.frame_in_play >= self.end_frame:
+                # 循环播放一个文件，如果到达文件末尾，重新播放
+                self.record = False
+                self.frame_in_play = self.start_frame
+
+            dt = 1/120
+            self.play_frame(self.csv_data_list[self.data_in_play], self.frame_in_play)
+            root_pos,root_rot,qpos,key_positions = self.IK()
+
+            if self.record:
+                if prev_root_pos is None or prev_root_rot is None or prev_qpos is None:
+                    prev_root_pos = root_pos
+                    prev_root_rot = root_rot
+                    prev_qpos = qpos
+                else:
+                    data_to_record = self.collect_data(
+                        root_pos,
+                        root_rot,
+                        qpos,
+                        keypoints=key_positions,
+                        prev_root_pos=prev_root_pos,
+                        prev_root_rot=prev_root_rot,
+                        prev_qpos=prev_qpos,
+                        dt=dt
+                    )
+                    self.record_stack.append(data_to_record)
+
+                    # 更新上一帧的数据
+                    prev_root_pos = root_pos
+                    prev_root_rot = root_rot
+                    prev_qpos = qpos
+
+            self.scene.step()
+            if self.play:
+                self.frame_in_play += 1
+
+    def calculate_linear_velocity(self, root_pos, prev_root_pos, dt):
+        """
+        计算根节点的位置线速度。
+
+        参数:
+        - root_pos (np.ndarray): 当前帧的根节点位置。
+        - prev_root_pos (np.ndarray): 上一帧的根节点位置。
+        - dt (float): 时间步长。
+
+        返回:
+        - linear_velocity (np.ndarray): 根节点的位置线速度。
+        """
+        linear_velocity = (root_pos - prev_root_pos) / dt
+        return linear_velocity
+
+    def calculate_angular_velocity(self, root_rot, prev_root_rot, dt):
+        """
+        计算根节点的角速度。
+
+        参数:
+        - root_rot (np.ndarray): 当前帧的根节点四元数旋转表示。
+        - prev_root_rot (np.ndarray): 上一帧的根节点四元数旋转表示。
+        - dt (float): 时间步长。
+
+        返回:
+        - angular_velocity (np.ndarray): 根节点的角速度。
+        """
+        # 计算四元数差
+        delta_quat = quaternion_multiply(root_rot, quaternion_multiply(prev_root_rot, [0, 0, 0, -1]))
+        delta_quat = delta_quat / np.linalg.norm(delta_quat)
+        
+        # 计算角速度
+        theta = 2 * np.arccos(delta_quat[0])
+        if theta < 1e-6:
+            angular_velocity = np.array([0, 0, 0])
+        else:
+            sin_half_theta = np.sin(theta / 2)
+            axis = delta_quat[1:] / sin_half_theta
+            angular_velocity = axis * theta / dt
+        
+        return angular_velocity
+
+    def calculate_joint_angular_velocities(self, qpos, prev_qpos, dt):
+        """
+        计算每个关节的角速度。
+
+        参数:
+        - qpos (np.ndarray): 当前帧的关节位置。
+        - prev_qpos (np.ndarray): 上一帧的关节位置。
+        - dt (float): 时间步长。
+
+        返回:
+        - joint_angular_velocities (np.ndarray): 每个关节的角速度。
+        """
+        joint_angular_velocities = (qpos - prev_qpos) / dt
+        return joint_angular_velocities
+
+    def collect_data(self, root_pos, root_rot, qpos, keypoints, prev_root_pos, prev_root_rot, prev_qpos, dt):
+        """
+        收集当前帧的数据，并计算线速度、角速度和关节角速度。
+
+        参数:
+        - root_pos (np.ndarray): 当前帧的根节点位置。
+        - root_rot (np.ndarray): 当前帧的根节点四元数旋转表示。
+        - qpos (np.ndarray): 当前帧的关节位置。
+        - keypoints (np.ndarray): 当前帧的关键点位置。
+        - prev_root_pos (np.ndarray): 上一帧的根节点位置。
+        - prev_root_rot (np.ndarray): 上一帧的根节点四元数旋转表示。
+        - prev_qpos (np.ndarray): 上一帧的关节位置。
+        - dt (float): 时间步长。
+
+        返回:
+        - data (list): 包含所有数据的列表。
+        """
+        _root_pos = torch.tensor(root_pos).cpu()
+        _root_rot = torch.tensor(root_rot).cpu()
+        _qpos = torch.tensor(qpos).cpu()
+        _keypoints = torch.tensor(keypoints).cpu()
+
+        # 计算线速度
+        linear_velocity = self.calculate_linear_velocity(root_pos, prev_root_pos, dt)
+        _linear_velocity = torch.tensor(linear_velocity).cpu()
+
+        # 计算角速度
+        angular_velocity = self.calculate_angular_velocity(root_rot, prev_root_rot, dt)
+        _angular_velocity = torch.tensor(angular_velocity).cpu()
+
+        # 计算关节角速度
+        joint_angular_velocities = self.calculate_joint_angular_velocities(qpos, prev_qpos, dt)
+        _joint_angular_velocities = torch.tensor(joint_angular_velocities).cpu()
+
+        return torch.cat([
+            _root_pos,
+            _root_rot,
+            _linear_velocity,
+            _angular_velocity,
+            _qpos,
+            _joint_angular_velocities,
+            _keypoints,
+        ], dim=0).tolist()
+
 
     def calculate_root_state(self):
         """
@@ -418,7 +552,7 @@ class MotionRetarget:
             if point["name"] == "b_LeftArm":
                 FRS_target = point['point'].get_pos()
                 
-                
+        
         delta_FR = FRF_target - FRS_target
         delta_FL = FLF_target - FLS_target
         delta_RR = RRF_target - RRS_target
@@ -429,28 +563,41 @@ class MotionRetarget:
         RLF_target = delta_RL + pos[self.RL_sholder]
         RRF_target = delta_RR + pos[self.RR_sholder]
                  
-        
-
 
         qpos = self.robot.inverse_kinematics_multilink(
             links=[self.FL_link, self.FR_link, self.RL_link, self.RR_link],  # 指定需要控制的链接
-            poss=[FLF_target, FRF_target, RLF_target, RRF_target],  # 指定目标位置
+            poss=[FLF_target, FRF_target, RLF_target, RRF_target], 
+            max_samples=25,
+            max_solver_iters=10,# 指定目标位置
         ) 
         self.robot.set_qpos(qpos)
         
-        
-        
-        return qpos
+
+        key_positions = self.robot.get_links_pos()
+        key_positions = torch.cat([
+            key_positions[self.FL_link.idx_local],
+            key_positions[self.FR_link.idx_local],
+            key_positions[self.RL_link.idx_local],
+            key_positions[self.RR_link.idx_local]
+            ],dim=0               
+        )
+
+        return root_pos,root_rot,qpos,key_positions
+
+import plotly.graph_objs as go
+import plotly.express as px
+from dash import Dash, dcc, html
+from dash.dependencies import Input, Output
+import webbrowser
 
 class TkinterUI:
-    def __init__(self, master, motion_retarget: MotionRetarget):
+    def __init__(self, master, motion_retarget: MotionRetarget,csv_header):
         self.master = master  # 设置主窗口
         self.motion_retarget = motion_retarget  # 设置 MotionRetarget 实例
         self.current_data_index = None  # 当前选中的数据集索引
         self.current_frame = 0  # 当前帧索引
         self.is_playing = False  # 播放状态标志
-
-        self.master.title("Motion Retarget UI")  # 设置窗口标题
+        self.csv_header = csv_header  # 存储CSV表头
 
         # 创建一个框架来存放数据按钮
         self.data_frame = ttk.Frame(master)
@@ -513,6 +660,17 @@ class TkinterUI:
 
         self.jump_button = ttk.Button(master, text="Jump to Frame", command=self.jump_to_frame)  # 创建跳转按钮
         self.jump_button.pack()  # 将跳转按钮添加到窗口
+
+        # 添加记录按钮
+        self.record_button = ttk.Button(master, text="Record", command=self.toggle_record)  # 创建记录按钮
+        self.record_button.pack()  # 将记录按钮添加到窗口
+        # 添加平滑数据按钮
+        self.smooth_button = ttk.Button(master, text="Smooth Data", command=self.smooth_data)
+        self.smooth_button.pack()
+        # 添加导出按钮
+        self.export_button = ttk.Button(master, text="Export", command=self.export_data)  # 创建导出按钮
+        self.export_button.pack()  # 将导出按钮添加到窗口
+
 
         self.update_progress()  # 启动进度条更新循环
 
@@ -581,6 +739,19 @@ class TkinterUI:
         except ValueError:
             tk.messagebox.showerror("Invalid Input", "Please enter a valid start frame number.")
 
+    def toggle_record(self):
+        self.motion_retarget.record = not self.motion_retarget.record
+        if self.motion_retarget.record:
+            self.record_button.config(text="Stop Recording")
+            self.motion_retarget.play = True  # 开始播放数据
+            self.is_playing = True
+            self.play_button.config(text="Pause")
+        else:
+            self.record_button.config(text="Record")
+            self.motion_retarget.play = False  # 停止播放数据
+            self.is_playing = False
+            self.play_button.config(text="Play")
+
     def set_end_frame(self):
         try:
             end_frame = int(self.end_frame_entry.get())
@@ -590,6 +761,130 @@ class TkinterUI:
                 tk.messagebox.showerror("Invalid Input", "End frame number out of range.")
         except ValueError:
             tk.messagebox.showerror("Invalid Input", "Please enter a valid end frame number.")
+
+
+    def butter_lowpass(self, cutoff, fs, order=5):
+        nyq = 0.5 * fs
+        normal_cutoff = cutoff / nyq
+        if not 0 < normal_cutoff < 1:
+            raise ValueError("Normal cutoff frequency must be between 0 and 1")
+        b, a = butter(order, normal_cutoff, btype='low', analog=False)
+        return b, a
+
+    def lowpass_filter(self, data, cutoff, fs, order=5):
+        b, a = self.butter_lowpass(cutoff, fs, order=order)
+        y = lfilter(b, a, data)
+        return y
+
+    def plot_data(self, original_data, smoothed_data, columns):
+        app = Dash(__name__)
+
+        app.layout = html.Div([
+            html.H1("Joint Angular Velocity Data"),
+            dcc.Graph(id='graph'),
+            dcc.Dropdown(
+                id='column-dropdown',
+                options=[{'label': col, 'value': col} for col in columns],
+                value=columns[0]
+            )
+        ])
+
+        @app.callback(
+            Output('graph', 'figure'),
+            [Input('column-dropdown', 'value')]
+        )
+        def update_graph(selected_column):
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(y=original_data[selected_column], mode='lines', name='Original'))
+            fig.add_trace(go.Scatter(y=smoothed_data[selected_column], mode='lines', name='Smoothed'))
+            fig.update_layout(title=f'{selected_column} - Original vs Smoothed', xaxis_title='Frame', yaxis_title=selected_column)
+            return fig
+
+        # 启动 Dash 应用
+        threading.Thread(target=app.run_server, kwargs={'use_reloader': False}).start()
+        webbrowser.open('http://127.0.0.1:8050/')
+
+
+    def smooth_data(self):
+        if not self.motion_retarget.record_stack:
+            tk.messagebox.showinfo("No Data", "No data to smooth.")
+            return
+
+        # 将记录的数据转换为DataFrame
+        data = pd.DataFrame(self.motion_retarget.record_stack, columns=self.csv_header)
+
+        # 定义要平滑的关键点列
+        keypoint_columns = [        
+            'joint_angular_velocity_0', 'joint_angular_velocity_1', 'joint_angular_velocity_2', 'joint_angular_velocity_3', 
+            'joint_angular_velocity_4', 'joint_angular_velocity_5', 'joint_angular_velocity_6', 'joint_angular_velocity_7', 
+            'joint_angular_velocity_8', 'joint_angular_velocity_9', 'joint_angular_velocity_10', 'joint_angular_velocity_11']
+
+        # 设置采样频率和截止频率
+        fs = 120  # 假设采样频率为120Hz
+        cutoff = 50  # 截止频率为10Hz
+
+        # 记录平滑前的数据
+        original_data = data.copy()
+
+        # 对关键点列进行低通滤波处理
+        for col in keypoint_columns:
+            data[col] = self.lowpass_filter(data[col].values, cutoff, fs)
+
+        # 将平滑后的数据转换回列表
+        self.motion_retarget.record_stack = data.values.tolist()
+
+        # 绘制平滑前后的数据曲线
+        self.plot_data(original_data, data, keypoint_columns)
+
+        tk.messagebox.showinfo("Smoothing Complete", "Data has been smoothed.")
+
+    def export_data(self):
+        if not self.motion_retarget.record_stack:
+            tk.messagebox.showinfo("No Data", "No data to export.")
+            return
+
+        # 确保datasets文件夹存在
+        datasets_folder = os.path.join(os.path.dirname(__file__), '..', 'datasets')
+        if not os.path.exists(datasets_folder):
+            os.makedirs(datasets_folder)
+
+        # 构建CSV文件路径
+        csv_file_path = os.path.join(datasets_folder, 'exported_data.csv')
+
+        # 写入CSV文件
+        with open(csv_file_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(self.csv_header)  # 写入表头
+            writer.writerows(self.motion_retarget.record_stack)  # 写入数据
+
+        # 清空record_stack
+        self.motion_retarget.record_stack.clear()
+
+        tk.messagebox.showinfo("Export Complete", f"Data exported to {csv_file_path}")
+    def export_data(self):
+        if not self.motion_retarget.record_stack:
+            tk.messagebox.showinfo("No Data", "No data to export.")
+            return
+
+        # 确保datasets文件夹存在
+        datasets_folder = os.path.join(os.path.dirname(__file__), '..', 'datasets')
+        if not os.path.exists(datasets_folder):
+            os.makedirs(datasets_folder)
+
+        # 构建CSV文件路径
+        csv_file_path = os.path.join(datasets_folder, 'exported_data.csv')
+
+        # 写入CSV文件
+        with open(csv_file_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(self.csv_header)  # 写入表头
+            writer.writerows(self.motion_retarget.record_stack)  # 写入数据
+
+        # 清空record_stack
+        self.motion_retarget.record_stack.clear()
+
+        tk.messagebox.showinfo("Export Complete", f"Data exported to {csv_file_path}")
+
 
 if __name__ == "__main__":
     motion_retarget = MotionRetarget(
@@ -693,8 +988,20 @@ if __name__ == "__main__":
         scale=[0.007,0.007,0.007]
     )
 
+    # 定义CSV表头
+    csv_header = [
+        'root_pos_x', 'root_pos_y', 'root_pos_z',
+        #quaternion (w-x-y-z convention)
+        'root_rot_w', 'root_rot_x', 'root_rot_y', 'root_rot_z',
+        'linear_velocity_x', 'linear_velocity_y', 'linear_velocity_z',
+        'angular_velocity_x', 'angular_velocity_y', 'angular_velocity_z',
+        'qpos_0', 'qpos_1', 'qpos_2', 'qpos_3', 'qpos_4', 'qpos_5', 'qpos_6', 'qpos_7', 'qpos_8', 'qpos_9', 'qpos_10', 'qpos_11', 
+        'joint_angular_velocity_0', 'joint_angular_velocity_1', 'joint_angular_velocity_2', 'joint_angular_velocity_3', 'joint_angular_velocity_4', 'joint_angular_velocity_5', 'joint_angular_velocity_6', 'joint_angular_velocity_7', 'joint_angular_velocity_8', 'joint_angular_velocity_9', 'joint_angular_velocity_10', 'joint_angular_velocity_11',
+        'FL_foot_x','FL_foot_y','FL_foot_z', 'FR_foot_x','FR_foot_y','FR_foot_z', 'RL_foot_x','RL_foot_y','RL_foot_z', 'RR_foot_x','RR_foot_y','RR_foot_z'
+    ]
+
     root = tk.Tk()
-    ui = TkinterUI(root, motion_retarget)
+    ui = TkinterUI(root, motion_retarget, csv_header)
 
     # 启动数据播放线程
     data_thread = threading.Thread(target=motion_retarget.play_data, args=())
