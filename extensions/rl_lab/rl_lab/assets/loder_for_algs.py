@@ -106,3 +106,6 @@ class VQVAEMotion(MotionData_Base):
         def prepare_vqvae_state_trans():
             
             pass
+
+
+__main__

@@ -231,12 +231,12 @@ class MotionRetarget:
                 position = np.array([frame[x_col], frame[z_col], frame[y_col]])
                 point_info['point'].set_pos(position)
 
-
     def set_color(self,points, color):
         for point_info in self.point_list:
             if point_info['name'] == points:
                 point_info['point'].surface.color = color
         self.scene.step()
+
     def init(self):
         self.load_csv_files_from_folder()
         parser = argparse.ArgumentParser()
@@ -843,13 +843,21 @@ class TkinterUI:
             tk.messagebox.showinfo("No Data", "No data to export.")
             return
 
+        # 获取正在播放的数据文件名
+        if self.current_data_index is None:
+            tk.messagebox.showinfo("No Data", "No data file is currently playing.")
+            return
+
+        current_data_info = self.motion_retarget.csv_data_list[self.current_data_index]
+        filename = current_data_info['filename']
+
         # 确保datasets文件夹存在
         datasets_folder = os.path.join(os.path.dirname(__file__), '..', 'datasets')
         if not os.path.exists(datasets_folder):
             os.makedirs(datasets_folder)
 
-        # 构建CSV文件路径
-        csv_file_path = os.path.join(datasets_folder, 'exported_data.csv')
+        # 构建CSV文件路径，使用正在播放的数据文件名
+        csv_file_path = os.path.join(datasets_folder, filename)
 
         # 写入CSV文件
         with open(csv_file_path, mode='w', newline='') as file:
