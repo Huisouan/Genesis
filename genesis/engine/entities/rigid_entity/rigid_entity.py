@@ -8,9 +8,6 @@ from genesis.utils import linalg as lu
 from genesis.utils import mesh as mu
 from genesis.utils import mjcf as mju
 from genesis.utils import terrain as tu
-import rl_lab.utils.build_terrain as bt
-
-
 from genesis.utils import urdf as uu
 from genesis.utils.misc import tensor_to_array
 
@@ -95,9 +92,6 @@ class RigidEntity(Entity):
 
         elif isinstance(self._morph, gs.morphs.Terrain):
             self._load_terrain(self._morph, self._surface)
-        elif isinstance(self._morph, bt.MultiScaleTerrain):
-            self._load_terrain(self._morph, self._surface)
-            
         else:
             gs.raise_exception(f"Unsupported morph: {self._morph}.")
 
@@ -308,11 +302,7 @@ class RigidEntity(Entity):
             init_qpos=np.zeros(0),
         )
 
-        if isinstance(self.morph, bt.MultiScaleTerrain):
-            vmesh, mesh, self.terrain_hf = bt.parse_terrain(morph, surface)
-        else:
-            vmesh, mesh, self.terrain_hf = tu.parse_terrain(morph, surface)
-        
+        vmesh, mesh, self.terrain_hf = tu.parse_terrain(morph, surface)
         self.terrain_scale = np.array([morph.horizontal_scale, morph.vertical_scale])
 
         if morph.visualization:
@@ -634,17 +624,17 @@ class RigidEntity(Entity):
     @gs.assert_built
     def get_jacobian(self, link):
         """
-        获取目标链接的雅可比矩阵。
+        Get the Jacobian matrix for a target link.
 
-        参数
-        ----
+        Parameters
+        ----------
         link : RigidLink
-            目标链接。
+            The target link.
 
-        返回
-        ----
+        Returns
+        -------
         jacobian : torch.Tensor
-            雅可比矩阵，形状为 (n_envs, 6, entity.n_dofs) 或 (6, entity.n_dofs) 如果 n_envs == 0。
+            The Jacobian matrix of shape (n_envs, 6, entity.n_dofs) or (6, entity.n_dofs) if n_envs == 0.
         """
         if not self._requires_jac_and_IK:
             gs.raise_exception(
@@ -755,7 +745,6 @@ class RigidEntity(Entity):
         max_step_size=0.5,
         dofs_idx_local=None,
         return_error=False,
-        envs_idx=None,
     ):
         """
         Compute inverse kinematics for a single target link.
@@ -792,24 +781,20 @@ class RigidEntity(Entity):
             The indices of the dofs to set. If None, all dofs will be set. Note that here this uses the local `q_idx`, not the scene-level one. Defaults to None. This is used to specify which dofs the IK is applied to.
         return_error : bool, optional
             Whether to return the final errorqpos. Defaults to False.
-        envs_idx: None | array_like, optional
-            The indices of the environments to set. If None, all environments will be set. Defaults to None.
 
         Returns
         -------
-        qpos : array_like, shape (n_dofs,) or (n_envs, n_dofs) or (len(envs_idx), n_dofs)
+        qpos : array_like, shape (n_dofs,) or (n_envs, n_dofs)
             Solver qpos (joint positions).
-        (optional) error_pose : array_like, shape (6,) or (n_envs, 6) or (len(envs_idx), 6)
+        (optional) error_pose : array_like, shape (6,) or (n_envs, 6)
             Pose error for each target. The 6-vector is [err_pos_x, err_pos_y, err_pos_z, err_rot_x, err_rot_y, err_rot_z]. Only returned if `return_error` is True.
         """
         if self._solver.n_envs > 0:
-            envs_idx = self._solver._get_envs_idx(envs_idx)
-
             if pos is not None:
-                if pos.shape[0] != len(envs_idx):
+                if pos.shape[0] != self._solver.n_envs:
                     gs.raise_exception("First dimension of `pos` must be equal to `scene.n_envs`.")
             if quat is not None:
-                if quat.shape[0] != len(envs_idx):
+                if quat.shape[0] != self._solver.n_envs:
                     gs.raise_exception("First dimension of `quat` must be equal to `scene.n_envs`.")
 
         ret = self.inverse_kinematics_multilink(
@@ -828,7 +813,6 @@ class RigidEntity(Entity):
             max_step_size=max_step_size,
             dofs_idx_local=dofs_idx_local,
             return_error=return_error,
-            envs_idx=envs_idx,
         )
 
         if return_error:
@@ -857,12 +841,11 @@ class RigidEntity(Entity):
         max_step_size=0.5,
         dofs_idx_local=None,
         return_error=False,
-        envs_idx=None,
     ):
         """
-        计算多个目标链接的逆运动学。
+        Compute inverse kinematics for  multiple target links.
 
-        参数
+        Parameters
         ----------
         links : list of RigidLink
             List of links to be used as the end-effectors.
@@ -894,18 +877,15 @@ class RigidEntity(Entity):
             The indices of the dofs to set. If None, all dofs will be set. Note that here this uses the local `q_idx`, not the scene-level one. Defaults to None. This is used to specify which dofs the IK is applied to.
         return_error : bool, optional
             Whether to return the final errorqpos. Defaults to False.
-        envs_idx : None | array_like, optional
-            The indices of the environments to set. If None, all environments will be set. Defaults to None.
 
-        返回
+
+        Returns
         -------
-        qpos : array_like, shape (n_dofs,) or (n_envs, n_dofs) or (len(envs_idx), n_dofs)
+        qpos : array_like, shape (n_dofs,) or (n_envs, n_dofs)
             Solver qpos (joint positions).
-        (optional) error_pose : array_like, shape (6,) or (n_envs, 6) or (len(envs_idx), 6)
+        (optional) error_pose : array_like, shape (6,) or (n_envs, 6)
             Pose error for each target. The 6-vector is [err_pos_x, err_pos_y, err_pos_z, err_rot_x, err_rot_y, err_rot_z]. Only returned if `return_error` is True.
         """
-        if self._solver.n_envs > 0:
-            envs_idx = self._solver._get_envs_idx(envs_idx)
 
         if not self._requires_jac_and_IK:
             gs.raise_exception(
@@ -939,7 +919,7 @@ class RigidEntity(Entity):
             if poss[i] is not None:
                 link_pos_mask.append(True)
                 if self._solver.n_envs > 0:
-                    if poss[i].shape[0] != len(envs_idx):
+                    if poss[i].shape[0] != self._solver.n_envs:
                         gs.raise_exception("First dimension of elements in `poss` must be equal to scene.n_envs.")
             else:
                 link_pos_mask.append(False)
@@ -950,7 +930,7 @@ class RigidEntity(Entity):
             if quats[i] is not None:
                 link_rot_mask.append(True)
                 if self._solver.n_envs > 0:
-                    if quats[i].shape[0] != len(envs_idx):
+                    if quats[i].shape[0] != self._solver.n_envs:
                         gs.raise_exception("First dimension of elements in `quats` must be equal to scene.n_envs.")
             else:
                 link_rot_mask.append(False)
@@ -991,16 +971,10 @@ class RigidEntity(Entity):
 
         links_idx = torch.as_tensor([link.idx for link in links], dtype=gs.tc_int, device=gs.device)
         poss = torch.stack(
-            [
-                self._solver._process_dim(torch.as_tensor(pos, dtype=gs.tc_float, device=gs.device), envs_idx=envs_idx)
-                for pos in poss
-            ]
+            [self._solver._process_dim(torch.as_tensor(pos, dtype=gs.tc_float, device=gs.device)) for pos in poss]
         )
         quats = torch.stack(
-            [
-                self._solver._process_dim(torch.as_tensor(quat, dtype=gs.tc_float, device=gs.device), envs_idx=envs_idx)
-                for quat in quats
-            ]
+            [self._solver._process_dim(torch.as_tensor(quat, dtype=gs.tc_float, device=gs.device)) for quat in quats]
         )
 
         dofs_idx = self._get_dofs_idx_local(dofs_idx_local)
@@ -1043,12 +1017,10 @@ class RigidEntity(Entity):
             link_rot_mask,
             max_step_size,
             respect_joint_limit,
-            envs_idx,
         )
-        if self._solver.n_envs > 0:
-            qpos = self._IK_qpos_best.to_torch(gs.device).permute(1, 0)[envs_idx]
-        else:
-            qpos = self._IK_qpos_best.to_torch(gs.device).permute(1, 0).squeeze(0)
+        qpos = self._IK_qpos_best.to_torch(gs.device).permute(1, 0)
+        if self._solver.n_envs == 0:
+            qpos = qpos.squeeze(0)
 
         if return_error:
             error_pose = (
@@ -1087,7 +1059,6 @@ class RigidEntity(Entity):
         link_rot_mask: ti.types.ndarray(),
         max_step_size: ti.f32,
         respect_joint_limit: ti.i32,
-        envs_idx: ti.types.ndarray(),
     ):
         # convert to ti Vector
         pos_mask = ti.Vector([pos_mask_[0], pos_mask_[1], pos_mask_[2]], dt=gs.ti_float)
@@ -1095,7 +1066,7 @@ class RigidEntity(Entity):
         n_error_dims = 6 * n_links
 
         ti.loop_config(serialize=self._solver._para_level < gs.PARA_LEVEL.ALL)
-        for i_b in envs_idx:
+        for i_b in range(self._solver._B):
             # save original qpos
             for i_q in range(self.n_qs):
                 self._IK_qpos_orig[i_q, i_b] = self._solver.qpos[i_q + self._q_start, i_b]
@@ -1306,31 +1277,31 @@ class RigidEntity(Entity):
         planner="RRTConnect",
     ):
         """
-        从 `qpos_start` 规划一条路径到 `qpos_goal`。
+        Plan a path from `qpos_start` to `qpos_goal`.
 
-        参数
-        ----
+        Parameters
+        ----------
         qpos_goal : array_like
-            目标状态。
-        qpos_start : None | array_like, 可选
-            起始状态。如果为 None，则使用刚体实体的当前状态。默认为 None。
-        timeout : float, 可选
-            运动规划算法寻找解决方案的最大时间（秒）。默认为 5.0。
-        smooth_path : bool, 可选
-            是否在找到解决方案后平滑路径。默认为 True。
-        num_waypoints : int, 可选
-            插值路径的路点数量。如果为 None，则不进行插值。默认为 100。
-        ignore_collision : bool, 可选
-            是否在运动规划过程中忽略碰撞检测。默认为 False。
-        ignore_joint_limit : bool, 可选
-            是否在运动规划过程中忽略关节限制。默认为 False。
-        planner : str, 可选
-            要使用的运动规划算法名称。支持的规划器：'PRM', 'RRT', 'RRTConnect', 'RRTstar', 'EST', 'FMT', 'BITstar', 'ABITstar'。默认为 'RRTConnect'。
+            The goal state.
+        qpos_start : None | array_like, optional
+            The start state. If None, the current state of the rigid entity will be used. Defaults to None.
+        timeout : float, optional
+            The maximum time (in seconds) allowed for the motion planning algorithm to find a solution. Defaults to 5.0.
+        smooth_path : bool, optional
+            Whether to smooth the path after finding a solution. Defaults to True.
+        num_waypoints : int, optional
+            The number of waypoints to interpolate the path. If None, no interpolation will be performed. Defaults to 100.
+        ignore_collision : bool, optional
+            Whether to ignore collision checking during motion planning. Defaults to False.
+        ignore_joint_limit : bool, optional
+            Whether to ignore joint limits during motion planning. Defaults to False.
+        planner : str, optional
+            The name of the motion planning algorithm to use. Supported planners: 'PRM', 'RRT', 'RRTConnect', 'RRTstar', 'EST', 'FMT', 'BITstar', 'ABITstar'. Defaults to 'RRTConnect'.
 
-        返回
-        ----
+        Returns
+        -------
         waypoints : list
-            代表规划路径的路点列表。每个路点是一个数组，存储实体在单个时间步的 qpos。
+            A list of waypoints representing the planned path. Each waypoint is an array storing the entity's qpos of a single time step.
         """
 
         ########## validate ##########
@@ -1485,35 +1456,7 @@ class RigidEntity(Entity):
         joint : RigidJoint
             The joint object.
         """
-        """
-        通过名称或 ID 获取 RigidJoint 对象。
 
-        参数
-        ----
-        name : str, 可选
-            关节的名称。默认为 None。
-        id : str, 可选
-            关节的 ID。这可以是关节 ID 的子字符串。默认为 None。
-
-        返回
-        ----
-        joint : RigidJoint
-            关节对象。
-        """"""
-        通过名称或 ID 获取 RigidJoint 对象。
-
-        参数
-        ----
-        name : str, 可选
-            关节的名称。默认为 None。
-        id : str, 可选
-            关节的 ID。这可以是关节 ID 的子字符串。默认为 None。
-
-        返回
-        ----
-        joint : RigidJoint
-            关节对象。
-        """
         if name is not None:
             for joint in self._joints:
                 if joint.name == name:
@@ -1545,21 +1488,7 @@ class RigidEntity(Entity):
         link : RigidLink
             The link object.
         """
-        """
-        通过名称或 ID 获取 RigidLink 对象。
 
-        参数
-        ----
-        name : str, 可选
-            链接的名称。默认为 None。
-        id : str, 可选
-            链接的 ID。这可以是链接 ID 的子字符串。默认为 None。
-
-        返回
-        ----
-        link : RigidLink
-            链接对象。
-        """
         if name is not None:
             for link in self._links:
                 if link.name == name:
@@ -1761,9 +1690,8 @@ class RigidEntity(Entity):
             The indices of the environments. If None, all environments will be considered. Defaults to None.
         """
 
-        #if self.base_link.is_fixed:
-            
-            #gs.logger.warning("Base link is fixed. Overriding base link pose.")
+        if self.base_link.is_fixed:
+            gs.logger.warning("Base link is fixed. Overriding base link pose.")
 
         pos = torch.as_tensor(pos)
         if self._solver.n_envs == 0:
@@ -1793,8 +1721,8 @@ class RigidEntity(Entity):
             The indices of the environments. If None, all environments will be considered. Defaults to None.
         """
 
-        #if self.base_link.is_fixed:
-        #    gs.logger.warning("Base link is fixed. Overriding base link pose.")
+        if self.base_link.is_fixed:
+            gs.logger.warning("Base link is fixed. Overriding base link pose.")
 
         quat = torch.as_tensor(quat)
         if self._solver.n_envs == 0:
@@ -1861,14 +1789,6 @@ class RigidEntity(Entity):
         -------
         AABB : torch.Tensor, shape (2, 3) or (n_envs, 2, 3)
             The axis-aligned bounding box (AABB) of the entity (using collision geoms).
-        """
-        """
-        获取实体的轴对齐包围盒（AABB）（使用碰撞几何体）。
-
-        返回
-        ----
-        AABB : torch.Tensor, 形状 (2, 3) 或 (n_envs, 2, 3)
-            实体的轴对齐包围盒（AABB）（使用碰撞几何体）。
         """
         if self.n_geoms == 0:
             gs.raise_exception("Entity has no geoms.")
@@ -2114,42 +2034,42 @@ class RigidEntity(Entity):
     @gs.assert_built
     def get_dofs_control_force(self, dofs_idx_local=None, envs_idx=None):
         """
-        获取基于位置/速度控制命令计算的实体 DOF 内部控制力。
+        Get the entity's dofs' internal control force, computed based on the position/velocity control command.
 
-        参数
-        ----
-        dofs_idx_local : None | array_like, 可选
-            要获取的 DOF 的索引。如果为 None，则返回所有 DOF。注意这里使用的是本地 `q_idx`，而不是场景级别的索引。默认为 None。
-        envs_idx : None | array_like, 可选
-            环境的索引。如果为 None，则考虑所有环境。默认为 None。
+        Parameters
+        ----------
+        dofs_idx_local : None | array_like, optional
+            The indices of the dofs to get. If None, all dofs will be returned. Note that here this uses the local `q_idx`, not the scene-level one. Defaults to None.
+        envs_idx : None | array_like, optional
+            The indices of the environments. If None, all environments will be considered. Defaults to None.
 
-        返回
-        ----
-        control_force : torch.Tensor, 形状 (n_dofs,) 或 (n_envs, n_dofs)
-            实体的 DOF 内部控制力。
+        Returns
+        -------
+        control_force : torch.Tensor, shape (n_dofs,) or (n_envs, n_dofs)
+            The entity's dofs' internal control force.
         """
         return self._solver.get_dofs_control_force(self._get_dofs_idx(dofs_idx_local), envs_idx)
 
     @gs.assert_built
     def get_dofs_force(self, dofs_idx_local=None, envs_idx=None):
         """
-        获取实体在当前时间步的 DOF 内部力。
+        Get the entity's dofs' internal force at the current time step.
 
-        注意
+        Note
         ----
-        与 `get_dofs_control_force` 不同，此函数返回所有 DOF 在当前时间步实际经历的内部力。
+        Different from `get_dofs_control_force`, this function returns the actual internal force experienced by all the dofs at the current time step.
 
-        参数
-        ----
-        dofs_idx_local : None | array_like, 可选
-            要获取的 DOF 的索引。如果为 None，则返回所有 DOF。注意这里使用的是本地 `q_idx`，而不是场景级别的索引。默认为 None。
-        envs_idx : None | array_like, 可选
-            环境的索引。如果为 None，则考虑所有环境。默认为 None。
+        Parameters
+        ----------
+        dofs_idx_local : None | array_like, optional
+            The indices of the dofs to get. If None, all dofs will be returned. Note that here this uses the local `q_idx`, not the scene-level one. Defaults to None.
+        envs_idx : None | array_like, optional
+            The indices of the environments. If None, all environments will be considered. Defaults to None.
 
-        返回
-        ----
-        force : torch.Tensor, 形状 (n_dofs,) 或 (n_envs, n_dofs)
-            实体的 DOF 力。
+        Returns
+        -------
+        force : torch.Tensor, shape (n_dofs,) or (n_envs, n_dofs)
+            The entity's dofs' force.
         """
         return self._solver.get_dofs_force(self._get_dofs_idx(dofs_idx_local), envs_idx)
 
@@ -2253,21 +2173,21 @@ class RigidEntity(Entity):
     @gs.assert_built
     def get_dofs_limit(self, dofs_idx_local=None, envs_idx=None):
         """
-        获取实体自由度（DOFs）的位置限制（最小值和最大值）。
+        Get the positional limits (min and max) for the entity's dofs.
 
-        参数
+        Parameters
         ----------
-        dofs_idx : None | array_like, optional
+        dofs_idx_local : None | array_like, optional
             The indices of the dofs to get. If None, all dofs will be returned. Note that here this uses the local `q_idx`, not the scene-level one. Defaults to None.
         envs_idx : None | array_like, optional
             The indices of the environments. If None, all environments will be considered. Defaults to None.
 
-        返回
+        Returns
         -------
-        lower_limit : torch.Tensor, 形状 (n_dofs,) 或 (n_envs, n_dofs)
-            实体自由度的位置限制的下限。
-        upper_limit : torch.Tensor, 形状 (n_dofs,) 或 (n_envs, n_dofs)
-            实体自由度的位置限制的上限。
+        lower_limit : torch.Tensor, shape (n_dofs,) or (n_envs, n_dofs)
+            The lower limit of the positional limits for the entity's dofs.
+        upper_limit : torch.Tensor, shape (n_dofs,) or (n_envs, n_dofs)
+            The upper limit of the positional limits for the entity's dofs.
         """
         return self._solver.get_dofs_limit(self._get_dofs_idx(dofs_idx_local), envs_idx)
 
@@ -2311,16 +2231,16 @@ class RigidEntity(Entity):
     @gs.assert_built
     def detect_collision(self, env_idx=0):
         """
-        检测实体的碰撞。此功能仅支持单个环境。
+        Detects collision for the entity. This only supports a single environment.
 
-        注意
+        Note
         ----
-        该函数会重新检测实体的实时碰撞，因此它不依赖于 scene.step()，可以用于像运动规划这样的应用，这些应用不需要在状态采样期间进行物理模拟。
+        This function re-detects real-time collision for the entity, so it doesn't rely on scene.step() and can be used for applications like motion planning, which doesn't require physical simulation during state sampling.
 
-        参数
-        ----
-        env_idx : int, 可选
-            环境的索引。默认为 0。
+        Parameters
+        ----------
+        env_idx : int, optional
+            The index of the environment. Defaults to 0.
         """
 
         all_collision_pairs = self._solver.detect_collision(env_idx)
@@ -2430,14 +2350,6 @@ class RigidEntity(Entity):
         -------
         entity_links_force : torch.Tensor, shape (n_links, 3) or (n_envs, n_links, 3)
             The net force applied on each links due to direct external contacts.
-        """
-        """
-        返回由于直接外部接触作用在每个链接上的净力。
-
-        返回
-        ----
-        entity_links_force : torch.Tensor, 形状 (n_links, 3) 或 (n_envs, n_links, 3)
-            由于直接外部接触作用在每个链接上的净力。
         """
         scene_links_force = (
             self._solver.links_state.contact_force.to_torch(gs.device).clone().detach().permute([1, 0, 2])
