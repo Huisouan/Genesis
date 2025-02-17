@@ -755,6 +755,7 @@ class RigidEntity(Entity):
         max_step_size=0.5,
         dofs_idx_local=None,
         return_error=False,
+        envs_idx=None,
     ):
         """
         Compute inverse kinematics for a single target link.
@@ -791,20 +792,24 @@ class RigidEntity(Entity):
             The indices of the dofs to set. If None, all dofs will be set. Note that here this uses the local `q_idx`, not the scene-level one. Defaults to None. This is used to specify which dofs the IK is applied to.
         return_error : bool, optional
             Whether to return the final errorqpos. Defaults to False.
+        envs_idx: None | array_like, optional
+            The indices of the environments to set. If None, all environments will be set. Defaults to None.
 
         Returns
         -------
-        qpos : array_like, shape (n_dofs,) or (n_envs, n_dofs)
+        qpos : array_like, shape (n_dofs,) or (n_envs, n_dofs) or (len(envs_idx), n_dofs)
             Solver qpos (joint positions).
-        (optional) error_pose : array_like, shape (6,) or (n_envs, 6)
+        (optional) error_pose : array_like, shape (6,) or (n_envs, 6) or (len(envs_idx), 6)
             Pose error for each target. The 6-vector is [err_pos_x, err_pos_y, err_pos_z, err_rot_x, err_rot_y, err_rot_z]. Only returned if `return_error` is True.
         """
         if self._solver.n_envs > 0:
+            envs_idx = self._solver._get_envs_idx(envs_idx)
+
             if pos is not None:
-                if pos.shape[0] != self._solver.n_envs:
+                if pos.shape[0] != len(envs_idx):
                     gs.raise_exception("First dimension of `pos` must be equal to `scene.n_envs`.")
             if quat is not None:
-                if quat.shape[0] != self._solver.n_envs:
+                if quat.shape[0] != len(envs_idx):
                     gs.raise_exception("First dimension of `quat` must be equal to `scene.n_envs`.")
 
         ret = self.inverse_kinematics_multilink(
@@ -823,6 +828,7 @@ class RigidEntity(Entity):
             max_step_size=max_step_size,
             dofs_idx_local=dofs_idx_local,
             return_error=return_error,
+            envs_idx=envs_idx,
         )
 
         if return_error:
@@ -851,6 +857,7 @@ class RigidEntity(Entity):
         max_step_size=0.5,
         dofs_idx_local=None,
         return_error=False,
+        envs_idx=None,
     ):
         """
         计算多个目标链接的逆运动学。
@@ -858,43 +865,47 @@ class RigidEntity(Entity):
         参数
         ----------
         links : list of RigidLink
-            作为末端执行器使用的链接列表。
-        poss : list, 可选
-            目标位置列表。如果为空，则不会考虑位置误差。默认为 None。
-        quats : list, 可选
-            目标方向列表。如果为空，则不会考虑方向误差。默认为 None。
-        init_qpos : array_like, 形状 (n_dofs,), 可选
-            用于求解逆运动学的初始关节位置。如果为 None，则使用当前关节位置。默认为 None。
-        respect_joint_limit : bool, 可选
-            是否遵守关节限制。默认为 True。
-        max_samples : int, 可选
-            重新采样的尝试次数。默认为 50。
-        max_solver_iters : int, 可选
-            每次采样中求解器的最大迭代次数。默认为 20。
-        damping : float, 可选
-            阻尼最小二乘法的阻尼系数。默认为 0.01。
-        pos_tol : float, 可选
-            归一化位置误差的位置容差（以米为单位）。默认为 1e-4。
-        rot_tol : float, 可选
-            归一化旋转向量误差的旋转容差（以弧度为单位）。默认为 1e-4。
-        pos_mask : list, 形状 (3,), 可选
-            位置误差掩码。默认为 [True, True, True]。例如：如果您只关心 x 和 y 方向的位置，可以将其设置为 [True, True, False]。
-        rot_mask : list, 形状 (3,), 可选
-            旋转轴对齐掩码。默认为 [True, True, True]。例如：如果您只想让链接的 Z 轴与给定四元数的 Z 轴对齐，可以将其设置为 [False, False, True]。
-        max_step_size : float, 可选
-            每个逆运动学求解步骤在 q 空间中的最大步长。默认为 0.5。
-        dofs_idx_local : None | array_like, 可选
-            要设置的自由度索引。如果为 None，则设置所有自由度。请注意，这里使用的是本地 `q_idx`，而不是场景级别的索引。默认为 None。用于指定应用逆运动学的自由度。
-        return_error : bool, 可选
-            是否返回最终的误差 qpos。默认为 False。
+            List of links to be used as the end-effectors.
+        poss : list, optional
+            List of target positions. If empty, position error will not be considered. Defaults to None.
+        quats : list, optional
+            List of target orientations. If empty, orientation error will not be considered. Defaults to None.
+        init_qpos : array_like, shape (n_dofs,), optional
+            Initial qpos used for solving IK. If None, the current qpos will be used. Defaults to None.
+        respect_joint_limit : bool, optional
+            Whether to respect joint limits. Defaults to True.
+        max_samples : int, optional
+            Number of resample attempts. Defaults to 50.
+        max_solver_iters : int, optional
+            Maximum number of solver iterations per sample. Defaults to 20.
+        damping : float, optional
+            Damping for damped least squares. Defaults to 0.01.
+        pos_tol : float, optional
+            Position tolerance for normalized position error (in meter). Defaults to 1e-4.
+        rot_tol : float, optional
+            Rotation tolerance for normalized rotation vector error (in radian). Defaults to 1e-4.
+        pos_mask : list, shape (3,), optional
+            Mask for position error. Defaults to [True, True, True]. E.g.: If you only care about position along x and y, you can set it to [True, True, False].
+        rot_mask : list, shape (3,), optional
+            Mask for rotation axis alignment. Defaults to [True, True, True]. E.g.: If you only want the link's Z-axis to be aligned with the Z-axis in the given quat, you can set it to [False, False, True].
+        max_step_size : float, optional
+            Maximum step size in q space for each IK solver step. Defaults to 0.5.
+        dofs_idx_local : None | array_like, optional
+            The indices of the dofs to set. If None, all dofs will be set. Note that here this uses the local `q_idx`, not the scene-level one. Defaults to None. This is used to specify which dofs the IK is applied to.
+        return_error : bool, optional
+            Whether to return the final errorqpos. Defaults to False.
+        envs_idx : None | array_like, optional
+            The indices of the environments to set. If None, all environments will be set. Defaults to None.
 
         返回
         -------
-        qpos : array_like, 形状 (n_dofs,) 或 (n_envs, n_dofs)
-            求解器的 qpos（关节位置）。
-        (可选) error_pose : array_like, 形状 (6,) 或 (n_envs, 6)
-            每个目标的姿态误差。6 维向量为 [err_pos_x, err_pos_y, err_pos_z, err_rot_x, err_rot_y, err_rot_z]。仅在 `return_error` 为 True 时返回。
+        qpos : array_like, shape (n_dofs,) or (n_envs, n_dofs) or (len(envs_idx), n_dofs)
+            Solver qpos (joint positions).
+        (optional) error_pose : array_like, shape (6,) or (n_envs, 6) or (len(envs_idx), 6)
+            Pose error for each target. The 6-vector is [err_pos_x, err_pos_y, err_pos_z, err_rot_x, err_rot_y, err_rot_z]. Only returned if `return_error` is True.
         """
+        if self._solver.n_envs > 0:
+            envs_idx = self._solver._get_envs_idx(envs_idx)
 
         if not self._requires_jac_and_IK:
             gs.raise_exception(
@@ -928,7 +939,7 @@ class RigidEntity(Entity):
             if poss[i] is not None:
                 link_pos_mask.append(True)
                 if self._solver.n_envs > 0:
-                    if poss[i].shape[0] != self._solver.n_envs:
+                    if poss[i].shape[0] != len(envs_idx):
                         gs.raise_exception("First dimension of elements in `poss` must be equal to scene.n_envs.")
             else:
                 link_pos_mask.append(False)
@@ -939,7 +950,7 @@ class RigidEntity(Entity):
             if quats[i] is not None:
                 link_rot_mask.append(True)
                 if self._solver.n_envs > 0:
-                    if quats[i].shape[0] != self._solver.n_envs:
+                    if quats[i].shape[0] != len(envs_idx):
                         gs.raise_exception("First dimension of elements in `quats` must be equal to scene.n_envs.")
             else:
                 link_rot_mask.append(False)
@@ -980,10 +991,16 @@ class RigidEntity(Entity):
 
         links_idx = torch.as_tensor([link.idx for link in links], dtype=gs.tc_int, device=gs.device)
         poss = torch.stack(
-            [self._solver._process_dim(torch.as_tensor(pos, dtype=gs.tc_float, device=gs.device)) for pos in poss]
+            [
+                self._solver._process_dim(torch.as_tensor(pos, dtype=gs.tc_float, device=gs.device), envs_idx=envs_idx)
+                for pos in poss
+            ]
         )
         quats = torch.stack(
-            [self._solver._process_dim(torch.as_tensor(quat, dtype=gs.tc_float, device=gs.device)) for quat in quats]
+            [
+                self._solver._process_dim(torch.as_tensor(quat, dtype=gs.tc_float, device=gs.device), envs_idx=envs_idx)
+                for quat in quats
+            ]
         )
 
         dofs_idx = self._get_dofs_idx_local(dofs_idx_local)
@@ -1026,10 +1043,12 @@ class RigidEntity(Entity):
             link_rot_mask,
             max_step_size,
             respect_joint_limit,
+            envs_idx,
         )
-        qpos = self._IK_qpos_best.to_torch(gs.device).permute(1, 0)
-        if self._solver.n_envs == 0:
-            qpos = qpos.squeeze(0)
+        if self._solver.n_envs > 0:
+            qpos = self._IK_qpos_best.to_torch(gs.device).permute(1, 0)[envs_idx]
+        else:
+            qpos = self._IK_qpos_best.to_torch(gs.device).permute(1, 0).squeeze(0)
 
         if return_error:
             error_pose = (
@@ -1068,6 +1087,7 @@ class RigidEntity(Entity):
         link_rot_mask: ti.types.ndarray(),
         max_step_size: ti.f32,
         respect_joint_limit: ti.i32,
+        envs_idx: ti.types.ndarray(),
     ):
         # convert to ti Vector
         pos_mask = ti.Vector([pos_mask_[0], pos_mask_[1], pos_mask_[2]], dt=gs.ti_float)
@@ -1075,7 +1095,7 @@ class RigidEntity(Entity):
         n_error_dims = 6 * n_links
 
         ti.loop_config(serialize=self._solver._para_level < gs.PARA_LEVEL.ALL)
-        for i_b in range(self._solver._B):
+        for i_b in envs_idx:
             # save original qpos
             for i_q in range(self.n_qs):
                 self._IK_qpos_orig[i_q, i_b] = self._solver.qpos[i_q + self._q_start, i_b]
@@ -2341,42 +2361,16 @@ class RigidEntity(Entity):
         contact_info : dict
             The contact information.
         """
-        """
-        返回最近一次 `scene.step()` 计算的接触信息。
-        如果提供了 `with_entity`，则仅返回涉及调用实体和指定 `with_entity` 的接触信息。否则，返回所有涉及调用实体的接触信息。
 
-        返回的字典包含以下键（一个接触对由两个几何体组成：A 和 B）：
+        scene_contact_info = self._solver.collider.contact_data.to_torch(gs.device)
+        n_contacts = self._solver.collider.n_contacts.to_torch(gs.device)
 
-        - 'geom_a'     : 接触对中几何体 A 的全局几何体索引。（实际几何体对象可以通过 `scene.rigid_solver.geoms[geom_a]` 获取）
-        - 'geom_b'     : 接触对中几何体 B 的全局几何体索引。（实际几何体对象可以通过 `scene.rigid_solver.geoms[geom_b]` 获取）
-        - 'link_a'     : 接触对中包含几何体 A 的链接 A 的全局链接索引。（实际链接对象可以通过 `scene.rigid_solver.links[link_a]` 获取）
-        - 'link_b'     : 接触对中包含几何体 B 的链接 B 的全局链接索引。（实际链接对象可以通过 `scene.rigid_solver.links[link_b]` 获取）
-        - 'position'   : 接触位置在世界坐标系中的位置。
-        - 'force_a'    : 作用在几何体 A 上的接触力。
-        - 'force_b'    : 作用在几何体 B 上的接触力。
-        - 'valid_mask' : （仅在场景并行化时）一个布尔掩码，指示接触信息是否有效。
-
-        每个条目的形状为 `(n_envs, n_contacts, ...)` 对于并行化的场景，为 `(n_contacts, ...)` 对于非并行化的场景。
-
-        参数
-        ----
-        with_entity : RigidEntity, 可选
-            要检查接触的实体。默认为 None。
-
-        返回
-        ----
-        contact_info : dict
-            接触信息。
-        """
-        scene_contact_info = self._solver.collider.contact_data.to_numpy()
-        n_contacts = self._solver.collider.n_contacts.to_numpy()
-
-        valid_mask = np.logical_or(
-            np.logical_and(
+        valid_mask = torch.logical_or(
+            torch.logical_and(
                 scene_contact_info["geom_a"] >= self.geom_start,
                 scene_contact_info["geom_a"] < self.geom_end,
             ),
-            np.logical_and(
+            torch.logical_and(
                 scene_contact_info["geom_b"] >= self.geom_start,
                 scene_contact_info["geom_b"] < self.geom_end,
             ),
@@ -2384,24 +2378,27 @@ class RigidEntity(Entity):
         if with_entity is not None:
             if self.idx == with_entity.idx:
                 gs.raise_exception("`with_entity` cannot be the same as the caller entity.")
-
-            valid_mask = np.logical_and(
+            valid_mask = torch.logical_and(
                 valid_mask,
-                np.logical_or(
-                    np.logical_and(
+                torch.logical_or(
+                    torch.logical_and(
                         scene_contact_info["geom_a"] >= with_entity.geom_start,
                         scene_contact_info["geom_a"] < with_entity.geom_end,
                     ),
-                    np.logical_and(
+                    torch.logical_and(
                         scene_contact_info["geom_b"] >= with_entity.geom_start,
                         scene_contact_info["geom_b"] < with_entity.geom_end,
                     ),
                 ),
             )
-        valid_mask = np.logical_and(valid_mask, np.arange(valid_mask.shape[0])[:, None] < n_contacts)
+
+        # Create an index tensor for contacts and compare against per-env n_contacts.
+        # Assumes valid_mask.shape[0] corresponds to the maximum number of contacts.
+        contact_indices = torch.arange(valid_mask.shape[0], device=valid_mask.device).unsqueeze(1)
+        valid_mask = torch.logical_and(valid_mask, contact_indices < n_contacts)
 
         if self._solver.n_envs == 0:
-            valid_idx = np.where(valid_mask.squeeze())[0]
+            valid_idx = torch.nonzero(valid_mask.squeeze(), as_tuple=True)[0]
             contact_info = {
                 "geom_a": scene_contact_info["geom_a"][valid_idx, 0],
                 "geom_b": scene_contact_info["geom_b"][valid_idx, 0],
@@ -2412,16 +2409,16 @@ class RigidEntity(Entity):
                 "force_b": scene_contact_info["force"][valid_idx, 0],
             }
         else:
-            max_env_collisions = np.max(n_contacts)
+            max_env_collisions = int(torch.max(n_contacts).item())
             contact_info = {
-                "geom_a": scene_contact_info["geom_a"][:max_env_collisions].T,
-                "geom_b": scene_contact_info["geom_b"][:max_env_collisions].T,
-                "link_a": scene_contact_info["link_a"][:max_env_collisions].T,
-                "link_b": scene_contact_info["link_b"][:max_env_collisions].T,
-                "position": scene_contact_info["pos"][:max_env_collisions].transpose([1, 0, 2]),
-                "force_a": -scene_contact_info["force"][:max_env_collisions].transpose([1, 0, 2]),
-                "force_b": scene_contact_info["force"][:max_env_collisions].transpose([1, 0, 2]),
-                "valid_mask": valid_mask[:max_env_collisions].T,
+                "geom_a": scene_contact_info["geom_a"][:max_env_collisions].t(),
+                "geom_b": scene_contact_info["geom_b"][:max_env_collisions].t(),
+                "link_a": scene_contact_info["link_a"][:max_env_collisions].t(),
+                "link_b": scene_contact_info["link_b"][:max_env_collisions].t(),
+                "position": scene_contact_info["pos"][:max_env_collisions].permute(1, 0, 2),
+                "force_a": -scene_contact_info["force"][:max_env_collisions].permute(1, 0, 2),
+                "force_b": scene_contact_info["force"][:max_env_collisions].permute(1, 0, 2),
+                "valid_mask": valid_mask[:max_env_collisions].t(),
             }
         return contact_info
 
