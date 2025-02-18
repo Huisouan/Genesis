@@ -35,7 +35,18 @@ class MotionRetarget:
         self.play = True
         self.back = False
         self.record = False
-        self.record_stack = []
+        self.record_stack = {
+            'global_root_velocity': [],
+            'global_root_angular_velocity': [],
+            'global_translation': [],
+            'global_rotation': [],
+            'local_rotation': [],
+            'global_velocity': [],
+            'global_angular_velocity': [],
+            'dof_pos': [],
+            'dof_vels': [],
+        }
+        self.fps = 120
         self.init()
 
     def load_csv_files_from_folder(self):
@@ -201,23 +212,30 @@ class MotionRetarget:
         self.RL_link = self.robot.get_link('RL_foot')
         self.RR_link = self.robot.get_link('RR_foot')
         
-        self.FL_sholder = self.robot.get_link('FL_calf_rotor').idx_local
-        self.FR_sholder = self.robot.get_link('FR_calf_rotor').idx_local
-        self.RL_sholder = self.robot.get_link('RL_calf_rotor').idx_local
-        self.RR_sholder = self.robot.get_link('RR_calf_rotor').idx_local
+        self.FL_sholder = self.robot.get_link('FL_calf_rotor')
+        self.FR_sholder = self.robot.get_link('FR_calf_rotor')
+        self.RL_sholder = self.robot.get_link('RL_calf_rotor')
+        self.RR_sholder = self.robot.get_link('RR_calf_rotor')
         
-        self.FL_thigh = self.robot.get_link('FL_calf').idx_local
-        self.FR_thigh = self.robot.get_link('FR_calf').idx_local
-        self.RL_thigh = self.robot.get_link('RL_calf').idx_local
-        self.RR_thigh = self.robot.get_link('RR_calf').idx_local
+        self.FL_thigh = self.robot.get_link('FL_calf')
+        self.FR_thigh = self.robot.get_link('FR_calf')
+        self.RL_thigh = self.robot.get_link('RL_calf')
+        self.RR_thigh = self.robot.get_link('RR_calf')
         
-        
+      
         
 
         self.add_axis()
         self.add_points(self.csv_data_list[0])
         self.scene.build()
         self.scene.reset()
+
+        self.motion_link_idxs = []
+        for link in self.robot._links:
+            if link.name not in ['FL_foot', 'FR_foot', 'RL_foot', 'RR_foot', 
+                                 'FL_calf_rotor', 'FR_calf_rotor', 'RL_calf_rotor', 'RR_calf_rotor'
+                                 ]:
+                self.motion_link_idxs.append(link.idx_local)  
 
     def play_frame(self,csv_data,row):
         frame = csv_data['data'].iloc[row]
@@ -248,10 +266,7 @@ class MotionRetarget:
         target_quat = np.array([1, 0, 0, 0])
         
     def play_data(self):
-        prev_root_pos = None
-        prev_root_rot = None
-        prev_qpos = None
-
+        prev_curr = None
         while True:
             if self.frame_in_play >= self.csv_data_list[self.data_in_play]['length'] or self.frame_in_play >= self.end_frame:
                 # 循环播放一个文件，如果到达文件末尾，重新播放
@@ -260,30 +275,29 @@ class MotionRetarget:
 
             dt = 1/120
             self.play_frame(self.csv_data_list[self.data_in_play], self.frame_in_play)
-            root_pos,root_rot,qpos,key_positions = self.IK()
+            curr = self.IK()
 
             if self.record:
-                if prev_root_pos is None or prev_root_rot is None or prev_qpos is None:
-                    prev_root_pos = root_pos
-                    prev_root_rot = root_rot
-                    prev_qpos = qpos
+                if prev_curr is None :
+                    prev_curr = curr
                 else:
                     data_to_record = self.collect_data(
-                        root_pos,
-                        root_rot,
-                        qpos,
-                        keypoints=key_positions,
-                        prev_root_pos=prev_root_pos,
-                        prev_root_rot=prev_root_rot,
-                        prev_qpos=prev_qpos,
+                        prev_curr,
+                        curr,
                         dt=dt
                     )
-                    self.record_stack.append(data_to_record)
-
-                    # 更新上一帧的数据
-                    prev_root_pos = root_pos
-                    prev_root_rot = root_rot
-                    prev_qpos = qpos
+                    self.record_stack['global_root_velocity'].append(data_to_record['global_root_velocity'])
+                    self.record_stack['global_root_angular_velocity'].append(data_to_record['global_root_angular_velocity'])
+                    self.record_stack['global_translation'].append(data_to_record['global_translation'])
+                    self.record_stack['global_rotation'].append(data_to_record['global_rotation'])
+                    self.record_stack['local_rotation'].append(data_to_record['local_rotation'])
+                    self.record_stack['global_velocity'].append(data_to_record['global_velocity'])
+                    self.record_stack['global_angular_velocity'].append(data_to_record['global_angular_velocity'])
+                    self.record_stack['dof_pos'].append(data_to_record['dof_pos'])
+                    self.record_stack['dof_vels'].append(data_to_record['dof_vels'])
+                    
+                    
+                prev_curr = curr
 
             self.scene.step()
             if self.play:
@@ -304,7 +318,7 @@ class MotionRetarget:
         linear_velocity = (root_pos - prev_root_pos) / dt
         return linear_velocity
 
-    def calculate_angular_velocity(self, root_rot, prev_root_rot, dt):
+    def calculate_angular_velocity(self, global_rotation, prev_global_rotations, dt):
         """
         计算根节点的角速度。
 
@@ -317,17 +331,19 @@ class MotionRetarget:
         - angular_velocity (np.ndarray): 根节点的角速度。
         """
         # 计算四元数差
-        delta_quat = quaternion_multiply(root_rot, quaternion_multiply(prev_root_rot, [0, 0, 0, -1]))
-        delta_quat = delta_quat / np.linalg.norm(delta_quat)
-        
-        # 计算角速度
-        theta = 2 * np.arccos(delta_quat[0])
-        if theta < 1e-6:
-            angular_velocity = np.array([0, 0, 0])
-        else:
-            sin_half_theta = np.sin(theta / 2)
-            axis = delta_quat[1:] / sin_half_theta
-            angular_velocity = axis * theta / dt
+        angular_velocity = np.zeros([global_rotation.shape[0], 3])
+        for i in range(global_rotation.shape[0]):
+            delta_quat = quaternion_multiply(global_rotation[i], quaternion_multiply(prev_global_rotations[i], torch.tensor([0, 0, 0, -1])))
+            delta_quat = delta_quat / torch.linalg.norm(delta_quat)
+            delta_quat = delta_quat.cpu().numpy()
+            # 计算角速度
+            theta = 2 * np.arccos(delta_quat[0])
+            if theta < 1e-6:
+                angular_velocity[i] = np.array([0, 0, 0])
+            else:
+                sin_half_theta = np.sin(theta / 2)
+                axis = delta_quat[1:] / sin_half_theta
+                angular_velocity[i] = axis * theta / dt
         
         return angular_velocity
 
@@ -346,49 +362,54 @@ class MotionRetarget:
         joint_angular_velocities = (qpos - prev_qpos) / dt
         return joint_angular_velocities
 
-    def collect_data(self, root_pos, root_rot, qpos, keypoints, prev_root_pos, prev_root_rot, prev_qpos, dt):
+    def collect_data(self, prev_curr, curr, dt):
         """
         收集当前帧的数据，并计算线速度、角速度和关节角速度。
 
         参数:
-        - root_pos (np.ndarray): 当前帧的根节点位置。
-        - root_rot (np.ndarray): 当前帧的根节点四元数旋转表示。
-        - qpos (np.ndarray): 当前帧的关节位置。
-        - keypoints (np.ndarray): 当前帧的关键点位置。
-        - prev_root_pos (np.ndarray): 上一帧的根节点位置。
-        - prev_root_rot (np.ndarray): 上一帧的根节点四元数旋转表示。
-        - prev_qpos (np.ndarray): 上一帧的关节位置。
+        - prev_curr (dict): 上一帧的数据字典，包含 'global_translation', 'global_rotation', 'local_rotation', 'dof_pos'。
+        - curr (dict): 当前帧的数据字典，包含 'global_translation', 'global_rotation', 'local_rotation', 'dof_pos'。
         - dt (float): 时间步长。
 
         返回:
-        - data (list): 包含所有数据的列表。
+        - data (dict): 包含所有数据的字典。
         """
-        _root_pos = torch.tensor(root_pos).cpu()
-        _root_rot = torch.tensor(root_rot).cpu()
-        _qpos = torch.tensor(qpos).cpu()
-        _keypoints = torch.tensor(keypoints).cpu()
+        global_translation = curr['global_translation']
+        global_rotation = curr['global_rotation']
+        dof_pos = curr['dof_pos']
+        
+        prev_global_translations = prev_curr['global_translation']
+        prev_global_rotations = prev_curr['global_rotation']
+        prev_dof_pos = prev_curr['dof_pos']
 
         # 计算线速度
-        linear_velocity = self.calculate_linear_velocity(root_pos, prev_root_pos, dt)
+        linear_velocity = self.calculate_linear_velocity(global_translation, prev_global_translations, dt)
         _linear_velocity = torch.tensor(linear_velocity).cpu()
 
         # 计算角速度
-        angular_velocity = self.calculate_angular_velocity(root_rot, prev_root_rot, dt)
+        angular_velocity = self.calculate_angular_velocity(global_rotation, prev_global_rotations, dt)
         _angular_velocity = torch.tensor(angular_velocity).cpu()
 
         # 计算关节角速度
-        joint_angular_velocities = self.calculate_joint_angular_velocities(qpos, prev_qpos, dt)
+        joint_angular_velocities = self.calculate_joint_angular_velocities(dof_pos, prev_dof_pos, dt)
         _joint_angular_velocities = torch.tensor(joint_angular_velocities).cpu()
 
-        return torch.cat([
-            _root_pos,
-            _root_rot,
-            _linear_velocity,
-            _angular_velocity,
-            _qpos,
-            _joint_angular_velocities,
-            _keypoints,
-        ], dim=0).tolist()
+        data = {
+            'global_root_velocity': torch.tensor(linear_velocity[0]).cpu().tolist(),
+            'global_root_angular_velocity': torch.tensor(angular_velocity[0]).cpu().tolist(),
+
+            'global_translation': curr['global_translation'],
+            'global_rotation': curr['global_rotation'],
+            'local_rotation': curr['local_rotation'],
+
+            'global_velocity': _linear_velocity.tolist(),
+            'global_angular_velocity': _angular_velocity.tolist(),
+                        
+            'dof_pos': curr['dof_pos'],
+            'dof_vels': _joint_angular_velocities.tolist(),
+        }
+
+        return data
 
 
     def calculate_root_state(self):
@@ -524,14 +545,14 @@ class MotionRetarget:
         pos = self.robot.get_links_pos()
         quat = self.robot.get_links_quat()
 
-        self.target_dict['FL_target'].set_pos(pos[self.FL_thigh])
-        self.target_dict['FR_target'].set_pos(pos[self.FR_thigh])
-        self.target_dict['RL_target'].set_pos(pos[self.RL_thigh])
-        self.target_dict['RR_target'].set_pos(pos[self.RR_thigh])
-        self.target_dict['FL_target'].set_quat(quat[self.FL_thigh])
-        self.target_dict['FR_target'].set_quat(quat[self.FR_thigh])
-        self.target_dict['RL_target'].set_quat(quat[self.RL_thigh])
-        self.target_dict['RR_target'].set_quat(quat[self.RR_thigh])
+        self.target_dict['FL_target'].set_pos(pos[self.FL_thigh.idx_local])
+        self.target_dict['FR_target'].set_pos(pos[self.FR_thigh.idx_local])
+        self.target_dict['RL_target'].set_pos(pos[self.RL_thigh.idx_local])
+        self.target_dict['RR_target'].set_pos(pos[self.RR_thigh.idx_local])
+        self.target_dict['FL_target'].set_quat(quat[self.FL_thigh.idx_local])
+        self.target_dict['FR_target'].set_quat(quat[self.FR_thigh.idx_local])
+        self.target_dict['RL_target'].set_quat(quat[self.RL_thigh.idx_local])
+        self.target_dict['RR_target'].set_quat(quat[self.RR_thigh.idx_local])
 
         for point in self.point_list:
             if point["name"] == "b_RightAnkle":
@@ -558,10 +579,10 @@ class MotionRetarget:
         delta_RR = RRF_target - RRS_target
         delta_RL = RLF_target - RLS_target
         
-        FLF_target = delta_FL + pos[self.FL_sholder]
-        FRS_target = delta_FR + pos[self.FR_sholder]
-        RLF_target = delta_RL + pos[self.RL_sholder]
-        RRF_target = delta_RR + pos[self.RR_sholder]
+        FLF_target = delta_FL + pos[self.FL_sholder.idx_local]
+        FRS_target = delta_FR + pos[self.FR_sholder.idx_local]
+        RLF_target = delta_RL + pos[self.RL_sholder.idx_local]
+        RRF_target = delta_RR + pos[self.RR_sholder.idx_local]
                  
 
         qpos = self.robot.inverse_kinematics_multilink(
@@ -573,17 +594,86 @@ class MotionRetarget:
         self.robot.set_qpos(qpos)
         
 
-        key_positions = self.robot.get_links_pos()
-        key_positions = torch.cat([
-            key_positions[self.FL_link.idx_local],
-            key_positions[self.FR_link.idx_local],
-            key_positions[self.RL_link.idx_local],
-            key_positions[self.RR_link.idx_local]
-            ],dim=0               
-        )
+                
+                
+        
+        
+        
+        global_translation = self.robot.get_links_pos()
+        global_rotation = self.robot.get_links_quat()
+        local_rotation = self.calculate_local_rotations(global_rotation, root_rot)
 
-        return root_pos,root_rot,qpos,key_positions
+        global_translation = global_translation[self.motion_link_idxs]
+        global_rotation = global_rotation[self.motion_link_idxs]
+        local_rotation = local_rotation[self.motion_link_idxs]
+        curr = {}
+        curr['global_translation'] = global_translation
+        curr['global_rotation'] = global_rotation
+        curr['local_rotation'] = local_rotation
+        curr['dof_pos'] = qpos
+        return curr
 
+
+
+    def calculate_local_rotations(self,global_rotation, root_rot):
+        """
+        计算每个链接的局部旋转。
+
+        参数:
+        - global_rotation (torch.Tensor): 所有链接的全局旋转四元数，形状为 (n_links, 4)。
+        - root_rot (torch.Tensor): 根链接的全局旋转四元数，形状为 (4,)。
+
+        返回:
+        - local_rotation (torch.Tensor): 所有链接的局部旋转四元数，形状为 (n_links, 4)。
+        """
+        n_links = global_rotation.shape[0]
+        local_rotation = torch.zeros_like(global_rotation)
+
+        for i in range(n_links):
+            # 获取当前链接的全局旋转
+            current_rot = global_rotation[i]
+
+            # 如果没有父链接，则局部旋转等于全局旋转
+            if i == 0:  # 假设根链接的索引为 0
+                local_rotation[i] = current_rot
+            else:
+                # 获取父链接的全局旋转
+                parent_rot = global_rotation[self.robot._links[i].parent_idx_local]# 假设父链接的索引为 i - 1
+
+                # 计算局部旋转：当前旋转减去父旋转
+                # 四元数的减法需要特殊处理，这里使用四元数的乘法逆
+                parent_rot_inv = quaternion_inverse(parent_rot)
+                local_rotation[i] = quaternion_multiply(current_rot, parent_rot_inv)
+
+        return local_rotation
+
+def quaternion_inverse(q):
+    """
+    计算四元数的逆。
+
+    参数:
+    - q (torch.Tensor): 四元数，形状为 (4,)。
+
+    返回:
+    - q_inv (torch.Tensor): 四元数的逆，形状为 (4,)。
+    """
+    q_inv = torch.tensor([q[0], -q[1], -q[2], -q[3]], dtype=q.dtype, device=q.device)
+    q_inv = q_inv / torch.norm(q)
+    return q_inv
+
+def quaternion_multiply(quaternion1, quaternion0):
+    """
+    返回两个四元数的乘积（PyTorch 版本）
+    """
+    w0, x0, y0, z0 = quaternion0.unbind(dim=-1)
+    w1, x1, y1, z1 = quaternion1.unbind(dim=-1)
+    
+    return torch.stack((
+        -x1*x0 - y1*y0 - z1*z0 + w1*w0,
+         x1*w0 + y1*z0 - z1*y0 + w1*x0,
+        -x1*z0 + y1*w0 + z1*x0 + w1*y0,
+         x1*y0 - y1*x0 + z1*w0 + w1*z0
+    ), dim=-1)
 import plotly.graph_objs as go
 import plotly.express as px
 from dash import Dash, dcc, html
@@ -775,69 +865,139 @@ class TkinterUI:
         b, a = self.butter_lowpass(cutoff, fs, order=order)
         y = lfilter(b, a, data)
         return y
-
-    def plot_data(self, original_data, smoothed_data, columns):
+    def plot_smoothed_data(self, original, smoothed, joint_indices):
+        """
+        可视化原始数据与平滑后数据的对比
+        
+        参数:
+        - original: numpy数组，原始关节角速度数据 [n_frames, n_joints]
+        - smoothed: numpy数组，平滑后的关节角速度数据 [n_frames, n_joints]
+        - joint_indices: 需要可视化的关节索引列表
+        """
+        # 转换数据为适合Plotly的格式
+        original = np.asarray(original)
+        smoothed = np.asarray(smoothed)
+        
+        # 创建Dash应用
         app = Dash(__name__)
-
+        
+        # 生成图表布局
         app.layout = html.Div([
-            html.H1("Joint Angular Velocity Data"),
-            dcc.Graph(id='graph'),
-            dcc.Dropdown(
-                id='column-dropdown',
-                options=[{'label': col, 'value': col} for col in columns],
-                value=columns[0]
-            )
+            html.H1("关节速度平滑效果对比", style={'textAlign': 'center'}),
+            html.Div([
+                dcc.Dropdown(
+                    id='joint-dropdown',
+                    options=[{'label': f'关节 {i}', 'value': i} for i in joint_indices],
+                    value=0,
+                    style={'width': '50%', 'margin': 'auto'}
+                )
+            ], style={'padding': 20}),
+            dcc.Graph(id='velocity-plot', style={'height': '80vh'})
         ])
 
         @app.callback(
-            Output('graph', 'figure'),
-            [Input('column-dropdown', 'value')]
+            Output('velocity-plot', 'figure'),
+            [Input('joint-dropdown', 'value')]
         )
-        def update_graph(selected_column):
+        def update_plot(selected_joint):
+            # 确保索引在合法范围内
+            selected_joint = min(max(selected_joint, 0), original.shape[1]-1)
+            
+            # 创建轨迹数据
+            frames = np.arange(original.shape[0])
+            
             fig = go.Figure()
-            fig.add_trace(go.Scatter(y=original_data[selected_column], mode='lines', name='Original'))
-            fig.add_trace(go.Scatter(y=smoothed_data[selected_column], mode='lines', name='Smoothed'))
-            fig.update_layout(title=f'{selected_column} - Original vs Smoothed', xaxis_title='Frame', yaxis_title=selected_column)
+            
+            # 添加原始数据轨迹
+            fig.add_trace(go.Scatter(
+                x=frames,
+                y=original[:, selected_joint],
+                name='原始数据',
+                line=dict(color='#1f77b4', width=1.5),
+                opacity=0.7
+            ))
+            
+            # 添加平滑数据轨迹
+            fig.add_trace(go.Scatter(
+                x=frames,
+                y=smoothed[:, selected_joint],
+                name='平滑数据',
+                line=dict(color='#ff7f0e', width=2, dash='dash'),
+                opacity=0.9
+            ))
+            
+            # 更新布局
+            fig.update_layout(
+                title=f'关节 {selected_joint} 角速度对比',
+                xaxis_title='帧序号',
+                yaxis_title='角速度 (rad/s)',
+                hovermode='x unified',
+                template='plotly_white',
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                ),
+                margin=dict(l=50, r=50, b=50, t=80),
+                height=600
+            )
+            
+            # 添加辅助线
+            fig.add_shape(
+                type="line",
+                x0=0, x1=frames[-1],
+                y0=0, y1=0,
+                line=dict(color="grey", width=1, dash="dot")
+            )
+            
             return fig
 
-        # 启动 Dash 应用
-        threading.Thread(target=app.run_server, kwargs={'use_reloader': False}).start()
+        # 异步启动可视化
+        def run_server():
+            app.run_server(debug=False, use_reloader=False)
+        
+        threading.Thread(target=run_server).start()
         webbrowser.open('http://127.0.0.1:8050/')
-
 
     def smooth_data(self):
         if not self.motion_retarget.record_stack:
             tk.messagebox.showinfo("No Data", "No data to smooth.")
             return
 
-        # 将记录的数据转换为DataFrame
-        data = pd.DataFrame(self.motion_retarget.record_stack, columns=self.csv_header)
+        # 转换为numpy数组
+        dof_vels = np.array(self.motion_retarget.record_stack['dof_vels'])
+        
+        # 定义要平滑的关节索引
+        JOINT_INDICES = list(range(dof_vels.shape[1]))  # 自动获取关节数量
+        
+        # 参数设置
+        fs = 120
+        cutoff = 50
+        order = 5
 
-        # 定义要平滑的关键点列
-        keypoint_columns = [        
-            'joint_angular_velocity_0', 'joint_angular_velocity_1', 'joint_angular_velocity_2', 'joint_angular_velocity_3', 
-            'joint_angular_velocity_4', 'joint_angular_velocity_5', 'joint_angular_velocity_6', 'joint_angular_velocity_7', 
-            'joint_angular_velocity_8', 'joint_angular_velocity_9', 'joint_angular_velocity_10', 'joint_angular_velocity_11']
+        # 对每个关节进行滤波
+        smoothed = np.zeros_like(dof_vels)
+        for joint_idx in JOINT_INDICES:
+            smoothed[:, joint_idx] = self.lowpass_filter(
+                dof_vels[:, joint_idx], 
+                cutoff, 
+                fs, 
+                order
+            )
 
-        # 设置采样频率和截止频率
-        fs = 120  # 假设采样频率为120Hz
-        cutoff = 50  # 截止频率为10Hz
+        # 转换回列表格式并更新
+        self.motion_retarget.record_stack['dof_vels'] = smoothed.tolist()
 
-        # 记录平滑前的数据
-        original_data = data.copy()
+        # 可视化（保持原有代码不变）
+        self.plot_smoothed_data(
+            original=dof_vels,
+            smoothed=smoothed,
+            joint_indices=JOINT_INDICES
+        )
 
-        # 对关键点列进行低通滤波处理
-        for col in keypoint_columns:
-            data[col] = self.lowpass_filter(data[col].values, cutoff, fs)
-
-        # 将平滑后的数据转换回列表
-        self.motion_retarget.record_stack = data.values.tolist()
-
-        # 绘制平滑前后的数据曲线
-        self.plot_data(original_data, data, keypoint_columns)
-
-        tk.messagebox.showinfo("Smoothing Complete", "Data has been smoothed.")
-
+        tk.messagebox.showinfo("Smoothing Complete", "Joint velocities have been smoothed.")
     def export_data(self):
         if not self.motion_retarget.record_stack:
             tk.messagebox.showinfo("No Data", "No data to export.")
@@ -849,49 +1009,32 @@ class TkinterUI:
             return
 
         current_data_info = self.motion_retarget.csv_data_list[self.current_data_index]
-        filename = current_data_info['filename']
+        filename = os.path.splitext(current_data_info['filename'])[0] + ".npz"  # 修改扩展名为pth
 
         # 确保datasets文件夹存在
         datasets_folder = os.path.join(os.path.dirname(__file__), '..', 'datasets')
         if not os.path.exists(datasets_folder):
             os.makedirs(datasets_folder)
 
-        # 构建CSV文件路径，使用正在播放的数据文件名
-        csv_file_path = os.path.join(datasets_folder, filename)
+        # 构建输出路径
+        output_path = os.path.join(datasets_folder, filename)
 
-        # 写入CSV文件
-        with open(csv_file_path, mode='w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(self.csv_header)  # 写入表头
-            writer.writerows(self.motion_retarget.record_stack)  # 写入数据
-
+        # 保存数据
+        torch.save(self.motion_retarget.record_stack, output_path)
+        
         # 清空record_stack
-        self.motion_retarget.record_stack.clear()
+        self.motion_retarget.record_stack = {
+            'global_root_velocity': [],
+            'global_root_angular_velocity': [],
+            'global_translation': [],
+            'global_rotation': [],
+            'local_rotation': [],
+            'global_velocity': [],
+            'global_angular_velocity': [],
+            'dof_pos': [],
+            'dof_vels': [],
+        }
 
-        tk.messagebox.showinfo("Export Complete", f"Data exported to {csv_file_path}")
-    def export_data(self):
-        if not self.motion_retarget.record_stack:
-            tk.messagebox.showinfo("No Data", "No data to export.")
-            return
-
-        # 确保datasets文件夹存在
-        datasets_folder = os.path.join(os.path.dirname(__file__), '..', 'datasets')
-        if not os.path.exists(datasets_folder):
-            os.makedirs(datasets_folder)
-
-        # 构建CSV文件路径
-        csv_file_path = os.path.join(datasets_folder, 'exported_data.csv')
-
-        # 写入CSV文件
-        with open(csv_file_path, mode='w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(self.csv_header)  # 写入表头
-            writer.writerows(self.motion_retarget.record_stack)  # 写入数据
-
-        # 清空record_stack
-        self.motion_retarget.record_stack.clear()
-
-        tk.messagebox.showinfo("Export Complete", f"Data exported to {csv_file_path}")
 
 
 if __name__ == "__main__":
