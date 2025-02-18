@@ -1009,15 +1009,20 @@ class TkinterUI:
             return
 
         current_data_info = self.motion_retarget.csv_data_list[self.current_data_index]
-        filename = os.path.splitext(current_data_info['filename'])[0] + ".npz"  # 修改扩展名为pth
+        base_filename = os.path.splitext(current_data_info['filename'])[0]
+        extension = ".npz"
 
         # 确保datasets文件夹存在
         datasets_folder = os.path.join(os.path.dirname(__file__), '..', 'datasets')
         if not os.path.exists(datasets_folder):
             os.makedirs(datasets_folder)
 
-        # 构建输出路径
-        output_path = os.path.join(datasets_folder, filename)
+        # 构建输出路径并检查文件名是否唯一
+        output_path = os.path.join(datasets_folder, base_filename + extension)
+        counter = 1
+        while os.path.exists(output_path):
+            output_path = os.path.join(datasets_folder, f"{base_filename}_{counter}{extension}")
+            counter += 1
 
         # 保存数据
         torch.save(self.motion_retarget.record_stack, output_path)
@@ -1034,6 +1039,8 @@ class TkinterUI:
             'dof_pos': [],
             'dof_vels': [],
         }
+
+        tk.messagebox.showinfo("Export Complete", f"Data exported to {output_path}")
 
 
 
