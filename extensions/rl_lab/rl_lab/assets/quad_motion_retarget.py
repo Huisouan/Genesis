@@ -36,6 +36,7 @@ class MotionRetarget:
         self.back = False
         self.record = False
         self.record_stack = {
+            'fps': 120,
             'global_root_velocity': [],
             'global_root_angular_velocity': [],
             'global_translation': [],
@@ -398,14 +399,14 @@ class MotionRetarget:
             'global_root_velocity': torch.tensor(linear_velocity[0]).cpu().tolist(),
             'global_root_angular_velocity': torch.tensor(angular_velocity[0]).cpu().tolist(),
 
-            'global_translation': curr['global_translation'],
-            'global_rotation': curr['global_rotation'],
-            'local_rotation': curr['local_rotation'],
+            'global_translation': curr['global_translation'].tolist(),
+            'global_rotation': curr['global_rotation'].tolist(),
+            'local_rotation': curr['local_rotation'].tolist(),
 
             'global_velocity': _linear_velocity.tolist(),
             'global_angular_velocity': _angular_velocity.tolist(),
                         
-            'dof_pos': curr['dof_pos'],
+            'dof_pos': curr['dof_pos'].tolist(),
             'dof_vels': _joint_angular_velocities.tolist(),
         }
 
@@ -999,48 +1000,56 @@ class TkinterUI:
 
         tk.messagebox.showinfo("Smoothing Complete", "Joint velocities have been smoothed.")
     def export_data(self):
-        if not self.motion_retarget.record_stack:
-            tk.messagebox.showinfo("No Data", "No data to export.")
-            return
-
-        # 获取正在播放的数据文件名
-        if self.current_data_index is None:
-            tk.messagebox.showinfo("No Data", "No data file is currently playing.")
-            return
-
-        current_data_info = self.motion_retarget.csv_data_list[self.current_data_index]
-        base_filename = os.path.splitext(current_data_info['filename'])[0]
-        extension = ".npz"
-
-        # 确保datasets文件夹存在
-        datasets_folder = os.path.join(os.path.dirname(__file__), '..', 'datasets')
-        if not os.path.exists(datasets_folder):
-            os.makedirs(datasets_folder)
-
-        # 构建输出路径并检查文件名是否唯一
-        output_path = os.path.join(datasets_folder, base_filename + extension)
-        counter = 1
-        while os.path.exists(output_path):
-            output_path = os.path.join(datasets_folder, f"{base_filename}_{counter}{extension}")
-            counter += 1
-
-        # 保存数据
-        torch.save(self.motion_retarget.record_stack, output_path)
+        # 检查所有数据列表是否为空
+        has_empty = any(
+            len(v) == 0 
+            for k, v in self.motion_retarget.record_stack.items() 
+            if isinstance(v, list)
+        )
         
-        # 清空record_stack
-        self.motion_retarget.record_stack = {
-            'global_root_velocity': [],
-            'global_root_angular_velocity': [],
-            'global_translation': [],
-            'global_rotation': [],
-            'local_rotation': [],
-            'global_velocity': [],
-            'global_angular_velocity': [],
-            'dof_pos': [],
-            'dof_vels': [],
-        }
+        if has_empty:
+            tk.messagebox.showinfo("Invalid Data", "Cannot export with empty data lists.")
+            return
 
-        tk.messagebox.showinfo("Export Complete", f"Data exported to {output_path}")
+        try:
+            # 创建要导出的副本数据
+            export_data = {}
+            for k, v in self.motion_retarget.record_stack.items():
+                if isinstance(v, list):
+                    # 将列表转换为张量
+                    if v:  # 确保列表非空
+                        # 自动推断数据类型（保留原始精度）
+                        export_data[k] = torch.tensor(v)
+                    else:
+                        export_data[k] = torch.empty(0)  # 创建空张量占位
+                else:
+                    export_data[k] = v  # 非列表字段直接复制
+
+            # 保存路径处理（保持原有逻辑）
+            current_data_info = self.motion_retarget.csv_data_list[self.current_data_index]
+            base_filename = os.path.splitext(current_data_info['filename'])[0]
+            extension = ".npy"  # 更合适的扩展名
+            
+            datasets_folder = os.path.join(os.path.dirname(__file__), '..', 'datasets')
+            os.makedirs(datasets_folder, exist_ok=True)
+            
+            output_path = os.path.join(datasets_folder, base_filename + extension)
+            counter = 1
+            while os.path.exists(output_path):
+                output_path = os.path.join(datasets_folder, f"{base_filename}_{counter}{extension}")
+                counter += 1
+
+            # 保存张量数据
+            torch.save(export_data, output_path)
+            
+            # 清空记录栈（保持原有逻辑）
+            self.motion_retarget.record_stack = {k: [] if isinstance(v, list) else v 
+                                            for k, v in self.motion_retarget.record_stack.items()}
+
+            tk.messagebox.showinfo("Export Complete", f"Data exported to {output_path}")
+            
+        except Exception as e:
+            tk.messagebox.showerror("Export Error", f"Failed to export data: {str(e)}")
 
 
 
