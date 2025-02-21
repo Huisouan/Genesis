@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from scipy.spatial.transform import Rotation as R
 from rl_lab.assets.transformations import quaternion_from_matrix ,quaternion_multiply
 from scipy.signal import butter, lfilter
-
+from flask import request
 INIT_ROT = np.array([0, 0, 0, 1.0])
 class MotionRetarget:
     def __init__(self, mocap_file, urdf_file, name_list, point_names, joint_names, key_points, scale=[1,1,1]):
@@ -385,19 +385,19 @@ class MotionRetarget:
 
         # 计算线速度
         linear_velocity = self.calculate_linear_velocity(global_translation, prev_global_translations, dt)
-        _linear_velocity = torch.tensor(linear_velocity).cpu()
+        _linear_velocity = linear_velocity.clone().detach().cpu()
 
         # 计算角速度
         angular_velocity = self.calculate_angular_velocity(global_rotation, prev_global_rotations, dt)
-        _angular_velocity = torch.tensor(angular_velocity).cpu()
+        _angular_velocity = angular_velocity.clone().detach().cpu()
 
         # 计算关节角速度
         joint_angular_velocities = self.calculate_joint_angular_velocities(dof_pos, prev_dof_pos, dt)
-        _joint_angular_velocities = torch.tensor(joint_angular_velocities).cpu()
+        _joint_angular_velocities = joint_angular_velocities.clone().detach().cpu()
 
         data = {
-            'global_root_velocity': torch.tensor(linear_velocity[0]).cpu().tolist(),
-            'global_root_angular_velocity': torch.tensor(angular_velocity[0]).cpu().tolist(),
+            'global_root_velocity': _linear_velocity[0].clone().detach().cpu().tolist(),
+            'global_root_angular_velocity': _angular_velocity[0].clone().detach().cpu().tolist(),
 
             'global_translation': curr['global_translation'].tolist(),
             'global_rotation': curr['global_rotation'].tolist(),
@@ -405,13 +405,33 @@ class MotionRetarget:
 
             'global_velocity': _linear_velocity.tolist(),
             'global_angular_velocity': _angular_velocity.tolist(),
-                        
+                            
             'dof_pos': curr['dof_pos'].tolist(),
             'dof_vels': _joint_angular_velocities.tolist(),
         }
 
         return data
 
+
+    def get_keypoints(self,frame,key_point_names):
+                # 初始化关键点位置字典
+        key_point_positions = {}
+
+        # 获取关键点位置
+        for point_name in key_point_names:
+            x_col = f"{point_name}.X"
+            y_col = f"{point_name}.Y"
+            z_col = f"{point_name}.Z"
+            
+            if x_col in frame and y_col in frame and z_col in frame:
+                position = np.array([frame[x_col], frame[z_col], frame[y_col]], dtype=np.float64)
+                key_point_positions[point_name] = position
+
+        # 确保所有关键点都存在
+        required_key_points = set(key_point_names)
+        if not required_key_points.issubset(key_point_positions.keys()):
+            raise ValueError("Required key points are not present in the current frame.")
+        return key_point_positions
 
     def calculate_root_state(self):
         """
@@ -435,24 +455,7 @@ class MotionRetarget:
             "b_RightLegUpper"
         ]
 
-        # 初始化关键点位置字典
-        key_point_positions = {}
-
-        # 获取关键点位置
-        for point_name in key_point_names:
-            x_col = f"{point_name}.X"
-            y_col = f"{point_name}.Y"
-            z_col = f"{point_name}.Z"
-            
-            if x_col in frame and y_col in frame and z_col in frame:
-                position = np.array([frame[x_col], frame[z_col], frame[y_col]], dtype=np.float64)
-                key_point_positions[point_name] = position
-
-        # 确保所有关键点都存在
-        required_key_points = set(key_point_names)
-        if not required_key_points.issubset(key_point_positions.keys()):
-            raise ValueError("Required key points are not present in the current frame.")
-
+        key_point_positions = self.get_keypoints(frame, key_point_names)
         # 提取关键点位置
         pelvis_pos = key_point_positions["Bip01"]
         neck_pos = key_point_positions["b__Neck"]
@@ -545,7 +548,7 @@ class MotionRetarget:
         
         pos = self.robot.get_links_pos()
         quat = self.robot.get_links_quat()
-
+        """
         self.target_dict['FL_target'].set_pos(pos[self.FL_thigh.idx_local])
         self.target_dict['FR_target'].set_pos(pos[self.FR_thigh.idx_local])
         self.target_dict['RL_target'].set_pos(pos[self.RL_thigh.idx_local])
@@ -554,7 +557,7 @@ class MotionRetarget:
         self.target_dict['FR_target'].set_quat(quat[self.FR_thigh.idx_local])
         self.target_dict['RL_target'].set_quat(quat[self.RL_thigh.idx_local])
         self.target_dict['RR_target'].set_quat(quat[self.RR_thigh.idx_local])
-
+        """
         for point in self.point_list:
             if point["name"] == "b_RightAnkle":
                 RLF_target = point['point'].get_pos()
@@ -675,6 +678,8 @@ def quaternion_multiply(quaternion1, quaternion0):
         -x1*z0 + y1*w0 + z1*x0 + w1*y0,
          x1*y0 - y1*x0 + z1*w0 + w1*z0
     ), dim=-1)
+    
+    
 import plotly.graph_objs as go
 import plotly.express as px
 from dash import Dash, dcc, html
@@ -682,14 +687,13 @@ from dash.dependencies import Input, Output
 import webbrowser
 
 class TkinterUI:
-    def __init__(self, master, motion_retarget: MotionRetarget,csv_header):
+    def __init__(self, master, motion_retarget: MotionRetarget):
         self.master = master  # 设置主窗口
         self.motion_retarget = motion_retarget  # 设置 MotionRetarget 实例
         self.current_data_index = None  # 当前选中的数据集索引
         self.current_frame = 0  # 当前帧索引
         self.is_playing = False  # 播放状态标志
-        self.csv_header = csv_header  # 存储CSV表头
-
+        self.dash_app = None  # 初始化 dash_app 属性
         # 创建一个框架来存放数据按钮
         self.data_frame = ttk.Frame(master)
         self.data_frame.pack(pady=10, side=tk.LEFT, fill=tk.Y)  # 将框架添加到窗口
@@ -875,15 +879,16 @@ class TkinterUI:
         - smoothed: numpy数组，平滑后的关节角速度数据 [n_frames, n_joints]
         - joint_indices: 需要可视化的关节索引列表
         """
-        # 转换数据为适合Plotly的格式
-        original = np.asarray(original)
-        smoothed = np.asarray(smoothed)
-        
+        # 关闭之前的Dash应用
+        if self.dash_app is not None:
+            self.dash_app.server.shutdown()
+            self.dash_app = None
+
         # 创建Dash应用
-        app = Dash(__name__)
+        self.dash_app = Dash(__name__)
         
         # 生成图表布局
-        app.layout = html.Div([
+        self.dash_app.layout = html.Div([
             html.H1("关节速度平滑效果对比", style={'textAlign': 'center'}),
             html.Div([
                 dcc.Dropdown(
@@ -896,7 +901,7 @@ class TkinterUI:
             dcc.Graph(id='velocity-plot', style={'height': '80vh'})
         ])
 
-        @app.callback(
+        @self.dash_app.callback(
             Output('velocity-plot', 'figure'),
             [Input('joint-dropdown', 'value')]
         )
@@ -957,7 +962,7 @@ class TkinterUI:
 
         # 异步启动可视化
         def run_server():
-            app.run_server(debug=False, use_reloader=False)
+            self.dash_app.run_server(debug=False, use_reloader=False)
         
         threading.Thread(target=run_server).start()
         webbrowser.open('http://127.0.0.1:8050/')
@@ -1059,10 +1064,10 @@ if __name__ == "__main__":
         urdf_file="datasets/go2_description/urdf/go2_description.urdf",
         name_list=[
             "Base",
-            "FR",
-            "FL",
-            "RR",
-            "RL",
+           # "FR",
+           # "FL",
+           # "RR",
+           # "RL",
         ],
         point_names=[
             "Bip01",
@@ -1155,20 +1160,8 @@ if __name__ == "__main__":
         scale=[0.007,0.007,0.007]
     )
 
-    # 定义CSV表头
-    csv_header = [
-        'root_pos_x', 'root_pos_y', 'root_pos_z',
-        #quaternion (w-x-y-z convention)
-        'root_rot_w', 'root_rot_x', 'root_rot_y', 'root_rot_z',
-        'linear_velocity_x', 'linear_velocity_y', 'linear_velocity_z',
-        'angular_velocity_x', 'angular_velocity_y', 'angular_velocity_z',
-        'qpos_0', 'qpos_1', 'qpos_2', 'qpos_3', 'qpos_4', 'qpos_5', 'qpos_6', 'qpos_7', 'qpos_8', 'qpos_9', 'qpos_10', 'qpos_11', 
-        'joint_angular_velocity_0', 'joint_angular_velocity_1', 'joint_angular_velocity_2', 'joint_angular_velocity_3', 'joint_angular_velocity_4', 'joint_angular_velocity_5', 'joint_angular_velocity_6', 'joint_angular_velocity_7', 'joint_angular_velocity_8', 'joint_angular_velocity_9', 'joint_angular_velocity_10', 'joint_angular_velocity_11',
-        'FL_foot_x','FL_foot_y','FL_foot_z', 'FR_foot_x','FR_foot_y','FR_foot_z', 'RL_foot_x','RL_foot_y','RL_foot_z', 'RR_foot_x','RR_foot_y','RR_foot_z'
-    ]
-
     root = tk.Tk()
-    ui = TkinterUI(root, motion_retarget, csv_header)
+    ui = TkinterUI(root, motion_retarget)
 
     # 启动数据播放线程
     data_thread = threading.Thread(target=motion_retarget.play_data, args=())
