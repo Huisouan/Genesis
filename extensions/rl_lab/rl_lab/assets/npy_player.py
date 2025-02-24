@@ -38,7 +38,7 @@ class NPYPlayer:
     def load_npy_data(self):
         """加载包含机器人状态的npy数据"""
         self.data = EasyDict(torch.load(self.npy_files[self.current_file_index]))
-        self.end_frame = len(self.data)
+        self.end_frame = self.data['dof_pos'].shape[0]
 
     def switch_file(self, index):
         """切换到指定的npy文件"""
@@ -67,13 +67,14 @@ class NPYPlayer:
                 enable_collision=False,
             ),
         )
-        
+        self.scene.add_entity(gs.morphs.Plane())        
         # 加载机器人URDF模型
         self.robot = self.scene.add_entity(
             gs.morphs.URDF(
                 file=self.urdf_file,
                 pos=(0, 0, 0.4),
-                merge_fixed_links=True
+                merge_fixed_links=True,
+                fixed=True
             ),
         )
         
@@ -89,7 +90,7 @@ class NPYPlayer:
         self.robot.set_quat(self.data['global_rotation'][frame_idx,0,:])
         qp = self.robot.get_qpos()
         # 设置关节位置
-        self.robot.set_dofs_position(self.data['dof_pos'][frame_idx,:])
+        self.robot.set_qpos(self.data['dof_pos'][frame_idx,:])
         
     def play_data(self):
         """数据播放主循环"""
@@ -102,6 +103,10 @@ class NPYPlayer:
             if self.play:
                 self.frame_in_play += 1
 
+    def get_total_frames(self):
+        """获取当前文件的总帧数"""
+        return self.end_frame
+
 class TkinterUI:
     def __init__(self, master, player: NPYPlayer):
         self.master = master
@@ -112,6 +117,10 @@ class TkinterUI:
         self.file_var.set(self.player.npy_files[0])  # 默认选择第一个文件
         self.file_menu = ttk.OptionMenu(master, self.file_var, *self.player.npy_files, command=self.select_file)
         self.file_menu.pack()
+
+        # 显示当前文件的总帧数
+        self.total_frames_label = ttk.Label(master, text=f"总帧数: {self.player.get_total_frames()}")
+        self.total_frames_label.pack()
         
         # 播放控制组件
         self.progress_var = tk.IntVar()
@@ -129,7 +138,7 @@ class TkinterUI:
         
         ttk.Label(master, text="结束帧").pack()
         self.end_frame_entry = ttk.Entry(master) 
-        self.end_frame_entry.insert(0, str(len(self.player.data)))
+        self.end_frame_entry.insert(0, str(self.player.get_total_frames()))  # 设置结束帧的默认值为总帧数
         self.end_frame_entry.pack()
         
         # 控制按钮
@@ -145,6 +154,9 @@ class TkinterUI:
         """选择要播放的文件"""
         index = self.player.npy_files.index(value)
         self.player.switch_file(index)
+        self.total_frames_label.config(text=f"总帧数: {self.player.get_total_frames()}")  # 更新总帧数标签
+        self.end_frame_entry.delete(0, tk.END)
+        self.end_frame_entry.insert(0, str(self.player.get_total_frames()))  # 更新结束帧的默认值为总帧数
 
     def toggle_play(self):
         self.player.play = not self.player.play
@@ -154,7 +166,7 @@ class TkinterUI:
         try:
             start = int(self.start_frame_entry.get())
             end = int(self.end_frame_entry.get())
-            if 0 <= start < end <= len(self.player.data):
+            if 0 <= start < end <= self.player.data['dof_pos'].shape[0]:
                 self.player.start_frame = start
                 self.player.end_frame = end
                 self.player.frame_in_play = start
@@ -163,9 +175,47 @@ class TkinterUI:
 
     def export_data(self):
         """导出剪辑后的机器人数据"""
-        self.player.record_stack['motion_data'] = self.player.data[self.player.start_frame:self.player.end_frame]
-        torch.save(self.player.record_stack, "robot_motion_data_clip.npy")
-        print("数据已导出")
+        start = self.player.start_frame
+        end = self.player.end_frame
+        
+        # 创建一个新的记录栈
+        self.player.record_stack = {
+            'fps': self.player.fps
+        }
+        
+        for key, value in self.player.data.items():
+            if isinstance(value, torch.Tensor):
+                # 根据第0维度进行切片
+                self.player.record_stack[key] = value[start:end]
+            else:
+                # 保留原有状态
+                self.player.record_stack[key] = value
+        
+        # 获取源文件名并生成目标文件名
+        source_file = self.player.npy_files[self.player.current_file_index]
+        base_name = os.path.splitext(os.path.basename(source_file))[0]
+        target_folder = os.path.dirname(source_file)
+        
+        # 创建clipped目录
+        clipped_folder = os.path.join(target_folder, "clipped")
+        if not os.path.exists(clipped_folder):
+            os.makedirs(clipped_folder)
+        
+        target_file_name = f"{base_name}_clip.npy"
+        target_file_path = os.path.join(clipped_folder, target_file_name)
+        
+        # 检查目标文件夹中的文件，如果有相同名称的文件则增加序号
+        if os.path.exists(target_file_path):
+            existing_files = glob.glob(os.path.join(clipped_folder, f"{base_name}_clip_*.npy"))
+            if existing_files:
+                max_index = max(int(os.path.splitext(os.path.basename(f))[0].split('_')[-1]) for f in existing_files)
+                target_file_name = f"{base_name}_clip_{max_index + 1}.npy"
+            else:
+                target_file_name = f"{base_name}_clip_1.npy"
+            target_file_path = os.path.join(clipped_folder, target_file_name)
+        
+        torch.save(self.player.record_stack, target_file_path)
+        print(f"数据已导出到 {target_file_path}")
 
     def update_progress(self):
         """更新进度显示"""

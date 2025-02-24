@@ -10,7 +10,7 @@ import genesis as gs
 INIT_ROT = np.array([0, 0, 0, 1.0])
 
 class AutoMotionRetarget:
-    def __init__(self, mocap_dir, urdf_file, output_dir, point_names, joint_names, key_points, scale):
+    def __init__(self, mocap_dir, urdf_file, output_dir, point_names, joint_names, key_points, scale, mirror=False):
         self.mocap_dir = mocap_dir
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.urdf_file = urdf_file
@@ -19,6 +19,7 @@ class AutoMotionRetarget:
         self.joint_names = joint_names
         self.key_points = key_points
         self.scale = scale
+        self.mirror = mirror  # 新增镜像参数
         
         # 初始化核心数据结构
         self.csv_data_list = []
@@ -175,6 +176,8 @@ class AutoMotionRetarget:
             z_col = f"{point_name}.Z"
             if x_col in data.columns:
                 data[x_col] *= self.scale[0]
+                if self.mirror:  # 根据镜像参数调整x轴缩放
+                    data[x_col] *= -1
                 data[y_col] *= self.scale[1]
                 data[z_col] *= self.scale[2]
         
@@ -182,6 +185,7 @@ class AutoMotionRetarget:
         window_size = 5
         data_smoothed = data.rolling(window=window_size, center=True).mean()
         return data_smoothed.fillna(method='bfill').fillna(method='ffill')
+
 
     def _process_frame(self, data, frame_idx):
         """处理单帧数据"""
@@ -221,6 +225,8 @@ class AutoMotionRetarget:
     def _export_data(self, filename):
         """导出处理后的数据"""
         base_name = os.path.splitext(filename)[0]
+        if self.mirror:  # 根据镜像参数调整导出文件名
+            base_name += "_mirror"
         output_path = os.path.join(self.output_dir, f"{base_name}_processed.npy")
         
         export_data = {}
@@ -396,6 +402,14 @@ class AutoMotionRetarget:
         left_hip_pos = key_point_positions["b_LeftLegUpper"]
         right_hip_pos = key_point_positions["b_RightLegUpper"]
 
+        if self.mirror:
+            # 镜像处理
+            left_shoulder_pos = key_point_positions["b_RightArm"]
+            right_shoulder_pos = key_point_positions["b_LeftArm"]
+            left_hip_pos = key_point_positions["b_RightLegUpper"]
+            right_hip_pos = key_point_positions["b_LeftLegUpper"]        
+
+
         # 计算前向方向
         forward_dir = neck_pos - pelvis_pos
         forward_dir = forward_dir / np.linalg.norm(forward_dir)
@@ -523,6 +537,20 @@ class AutoMotionRetarget:
         FLS_target = key_point_positions["b_RightArm"]
         FRS_target = key_point_positions["b_LeftArm"]
         
+        if self.mirror:
+            RLF_target = key_point_positions["b_LeftAnkle"]
+            RRF_target = key_point_positions["b_RightAnkle"]
+            FLF_target = key_point_positions["b__LeftFinger"]
+            FRF_target = key_point_positions["b_RightFinger"]
+            
+            RLS_target = key_point_positions["b_LeftLegUpper"]
+            RRS_target = key_point_positions["b_RightLegUpper"]
+            FLS_target = key_point_positions["b_LeftArm"]
+            FRS_target = key_point_positions["b_RightArm"]            
+        
+        
+        
+        
         # 假设FRF_target, FRS_target, FLF_target, FLS_target, RRF_target, RRS_target, RLF_target, RLS_target都是numpy数组
         delta_FR = torch.tensor(FRF_target - FRS_target).to(self.device)
         delta_FL = torch.tensor(FLF_target - FLS_target).to(self.device)
@@ -556,7 +584,7 @@ class AutoMotionRetarget:
         curr['global_translation'] = global_translation
         curr['global_rotation'] = global_rotation
         curr['local_rotation'] = local_rotation
-        curr['dof_pos'] = dof_pos[self.motor_dofs]
+        curr['dof_pos'] = qpos
         return curr
 
     def calculate_local_rotations(self,global_rotation, root_rot):
@@ -707,6 +735,8 @@ if __name__ == "__main__":
             "RL_calf_joint",            
             ],  # 保留原有关节配置
         "key_points": [
+            
+            
             "Bip01",
             "b__Neck",
             "b_LeftArm",
@@ -720,7 +750,8 @@ if __name__ == "__main__":
             "b_LeftAnkle",
             "b_RightAnkle",                
             ],   # 保留原有关键点
-        "scale": [0.007, 0.007, 0.007]
+        "scale": [0.007, 0.007, 0.007],
+        "mirror": True,  # 新增镜像参数
     }
 
     processor = AutoMotionRetarget(**CONFIG)
