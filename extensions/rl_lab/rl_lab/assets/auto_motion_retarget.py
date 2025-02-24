@@ -83,7 +83,21 @@ class AutoMotionRetarget:
                                  'FL_calf_rotor', 'FR_calf_rotor', 'RL_calf_rotor', 'RR_calf_rotor'
                                  ]:
                 self.motion_link_idxs.append(link.idx_local)  
-
+        self.dof_names = [
+            "FR_hip_joint",
+            "FR_thigh_joint",
+            "FR_calf_joint",
+            "FL_hip_joint",
+            "FL_thigh_joint",
+            "FL_calf_joint",
+            "RR_hip_joint",
+            "RR_thigh_joint",
+            "RR_calf_joint",
+            "RL_hip_joint",
+            "RL_thigh_joint",
+            "RL_calf_joint",
+        ]
+        self.motor_dofs = [self.robot.get_joint(name).dof_idx_local for name in self.dof_names]
     def add_points(self, csv_info):
         """
         根据 CSV 数据在场景中添加点对象，并返回一个包含点名称和对应点对象的列表。
@@ -532,6 +546,7 @@ class AutoMotionRetarget:
         
         global_translation = self.robot.get_links_pos()
         global_rotation = self.robot.get_links_quat()
+        dof_pos = self.robot.get_dofs_position()
         local_rotation = self.calculate_local_rotations(global_rotation, root_rot)
 
         global_translation = global_translation[self.motion_link_idxs]
@@ -541,7 +556,7 @@ class AutoMotionRetarget:
         curr['global_translation'] = global_translation
         curr['global_rotation'] = global_rotation
         curr['local_rotation'] = local_rotation
-        curr['dof_pos'] = qpos
+        curr['dof_pos'] = dof_pos[self.motor_dofs]
         return curr
 
     def calculate_local_rotations(self,global_rotation, root_rot):
