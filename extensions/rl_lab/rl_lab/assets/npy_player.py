@@ -7,7 +7,7 @@ from tkinter import ttk
 import threading
 import torch
 from easydict import EasyDict
-
+import glob
 
 class NPYPlayer:
     def __init__(self, urdf_file, npy_files, fps=120):
@@ -15,7 +15,7 @@ class NPYPlayer:
         self.npy_files = npy_files
         self.current_file_index = 0
         self.fps = fps
-        self.data = None
+        self.data_list = []
         self.scene = None
         self.robot = None
         
@@ -32,25 +32,25 @@ class NPYPlayer:
             'fps': self.fps
         }
         
-        self.load_npy_data()
+        self.load_all_npy_data()
         self.initialize_scene()
 
-    def load_npy_data(self):
-        """加载包含机器人状态的npy数据"""
-        self.data = EasyDict(torch.load(self.npy_files[self.current_file_index]))
-        self.end_frame = self.data['dof_pos'].shape[0]
+    def load_all_npy_data(self):
+        """加载所有npy文件的数据"""
+        for file_path in self.npy_files:
+            data = EasyDict(torch.load(file_path))
+            self.data_list.append(data)
 
     def switch_file(self, index):
         """切换到指定的npy文件"""
         if 0 <= index < len(self.npy_files):
             self.current_file_index = index
-            self.load_npy_data()
+            self.data = self.data_list[index]
             self.frame_in_play = 0
             self.start_frame = 0
-            self.end_frame = 0
+            self.end_frame = self.data['dof_pos'].shape[0]
             self.record_stack['motion_data'] = []
             self.record = False
-            self.initialize_scene()
 
     def initialize_scene(self):
         """初始化3D场景并加载机器人模型"""
@@ -80,11 +80,12 @@ class NPYPlayer:
         
         self.scene.build()
         self.scene.reset()
+        self.data = self.data_list[self.current_file_index]
+        self.end_frame = self.data['dof_pos'].shape[0]
 
     def play_frame(self, frame_idx):
         """应用机器人状态到仿真环境"""
 
-        
         # 设置根关节状态
         self.robot.set_pos(self.data['global_translation'][frame_idx,0,:])
         self.robot.set_quat(self.data['global_rotation'][frame_idx,0,:])
@@ -226,8 +227,6 @@ class TkinterUI:
         self.master.after(100, self.update_progress)
 
 if __name__ == "__main__":
-    import glob
-
     urdf_file = "datasets/go2_description/urdf/go2_description.urdf"
     npy_folder = "processed_motions"  # 替换为你的npy文件夹路径
     npy_files = glob.glob(os.path.join(npy_folder, "*.npy"))
