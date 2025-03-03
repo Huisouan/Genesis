@@ -618,29 +618,33 @@ class Terrain(Morph):
     参数
     ----------
     file : str
-        文件路径。
-    scale : float 或 tuple, 可选
-        实体大小的缩放因子。如果为浮点数，则均匀缩放。如果为 3 元组，则沿每个轴缩放。默认为 1.0。注意，3 元组缩放仅支持 `gs.morphs.Mesh`。
-    pos : tuple, 形状 (3,), 可选
-        实体在米中的位置。默认为 (0.0, 0.0, 0.0)。
-    visualization : bool, 可选
-        实体是否需要可视化。如果需要仅用于碰撞检测的不可见对象，请将其设置为 False。默认为 True。`visualization` 和 `collision` 不能同时为 False。
-    collision : bool, 可选
-        实体是否需要考虑碰撞检测。默认为 True。`visualization` 和 `collision` 不能同时为 False。
-    randomize : bool, 可选
-        是否随机化涉及随机性的子地形。默认为 False。
-    n_subterrains : tuple of int, 可选
-        x 和 y 方向的子地形数量。默认为 (3, 3)。
-    subterrain_size : tuple of float, 可选
-        每个子地形的大小（米）。默认为 (12.0, 12.0)。
-    horizontal_scale : float, 可选
-        子地形中每个单元格的大小（米）。默认为 0.25。
-    vertical_scale : float, 可选
-        子地形中每个台阶的高度（米）。默认为 0.005。
-    subterrain_types : str 或 2D list of str, 可选
-        要生成的子地形类型。如果为字符串，则将其重复用于所有子地形。如果是 2D 列表，则应具有与 `n_subterrains` 相同的形状。
-    height_field : array-like, 可选
-        用于生成地形的高度场。如果指定，则忽略所有其他配置。默认为 None。
+        The path to the file.
+    scale : float or tuple, optional
+        The scaling factor for the size of the entity. If a float, it scales uniformly. If a 3-tuple, it scales along each axis. Defaults to 1.0. Note that 3-tuple scaling is only supported for `gs.morphs.Mesh`.
+    pos : tuple, shape (3,), optional
+        The position of the entity in meters. Defaults to (0.0, 0.0, 0.0).
+    visualization : bool, optional
+        Whether the entity needs to be visualized. Set it to False if you need a invisible object only for collision purposes. Defaults to True. `visualization` and `collision` cannot both be False.
+    collision : bool, optional
+        Whether the entity needs to be considered for collision checking. Defaults to True. `visualization` and `collision` cannot both be False.
+    randomize : bool, optional
+        Whether to randomize the subterrains that involve randomness. Defaults to False.
+    n_subterrains : tuple of int, optional
+        The number of subterrains in x and y directions. Defaults to (3, 3).
+    subterrain_size : tuple of float, optional
+        The size of each subterrain in meters. Defaults to (12.0, 12.0).
+    horizontal_scale : float, optional
+        The size of each cell in the subterrain in meters. Defaults to 0.25.
+    vertical_scale : float, optional
+        The height of each step in the subterrain in meters. Defaults to 0.005.
+    subterrain_types : str or 2D list of str, optional
+        The types of subterrains to generate. If a string, it will be repeated for all subterrains. If a 2D list, it should have the same shape as `n_subterrains`.
+    height_field : array-like, optional
+        The height field to generate the terrain. If specified, all other configurations will be ignored. Defaults to None.
+    name : str, optional
+        The name of the terrain to save
+    from_stored : str, optional
+        The path of the stored terrain to load
     """
 
     is_free: bool = False

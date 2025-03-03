@@ -1,12 +1,17 @@
-import screeninfo
-
+import pyglet
 import genesis as gs
 from genesis.repr_base import RBC
 
 from .camera import Camera
 from .rasterizer import Rasterizer
-from .rasterizer_context import RasterizerContext
-from .viewer import DummyViewerLock, Viewer
+
+
+class DummyViewerLock:
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
 
 
 class Visualizer(RBC):
@@ -18,30 +23,32 @@ class Visualizer(RBC):
         self._t = -1
         self._scene = scene
 
-        # Rasterizer context is shared by viewer and rasterizer.
-        if not show_viewer and gs.platform not in ["Linux", "macOS"]:
-            gs.logger.warning(f"Headless rendering not yet supported on {gs.platform}.")
-            self._context = None
-        else:
-            self._context = RasterizerContext(vis_options)
+        # Rasterizer context is shared by viewer and rasterizer
+        try:
+            from .viewer import Viewer
+            from .rasterizer_context import RasterizerContext
+
+        except Exception as e:
+            raise ImportError("Rendering not working on this machine.") from e
+        self._context = RasterizerContext(vis_options)
 
         # try to connect to display
         try:
-            monitor = screeninfo.get_monitors()[0]
+            display = pyglet.display.get_display()
+            screen = display.get_default_screen()
             self._connected_to_display = True
         except Exception:
             self._connected_to_display = False
 
         if show_viewer:
-            if not self.connected_to_display:
+            if not self._connected_to_display:
                 gs.raise_exception("No display detected. Use `show_viewer=False` for headless mode.")
-                self._connected_to_display = False
 
             if viewer_options.res is None:
-                viewer_size_ratio = 0.5
+                viewer_size_ratio = screen.get_scale() * 0.5
                 viewer_options.res = (
-                    int(monitor.height * viewer_size_ratio / 0.75),
-                    int(monitor.height * viewer_size_ratio),
+                    int(screen.height * viewer_size_ratio / 0.75),
+                    int(screen.height * viewer_size_ratio),
                 )
 
             self._viewer = Viewer(viewer_options, self._context)
@@ -50,11 +57,7 @@ class Visualizer(RBC):
             self._viewer = None
 
         # Rasterizer is always needed for depth and segmentation mask rendering.
-        if self._context is not None:
-            self._rasterizer = Rasterizer(self._viewer, self._context)
-
-        else:
-            self._rasterizer = None
+        self._rasterizer = Rasterizer(self._viewer, self._context)
 
         if isinstance(renderer, gs.renderers.RayTracer):
             from .raytracer import Raytracer
@@ -68,12 +71,6 @@ class Visualizer(RBC):
         self._cameras = gs.List()
 
     def add_camera(self, res, pos, lookat, up, model, fov, aperture, focus_dist, GUI, spp, denoise):
-        if gs.platform == "Windows":
-            # gs.raise_exception("Camera not yet supported on Windows but is supposed to. Can anyone help?")
-            gs.logger.warning("Camera may have some issues on Windows.")
-
-        # if self._viewer is None and gs.platform == 'macOS':
-        #     gs.raise_exception(f'Headless rendering not yet supported on {gs.platform}.')
         camera = Camera(
             self, len(self._cameras), model, res, pos, lookat, up, fov, aperture, focus_dist, GUI, spp, denoise
         )
@@ -83,8 +80,7 @@ class Visualizer(RBC):
     def reset(self):
         self._t = -1
 
-        if self._context is not None:
-            self._context.reset()
+        self._context.reset()
 
         # temp fix for cam.render() segfault
         if self._viewer is not None:
@@ -98,8 +94,7 @@ class Visualizer(RBC):
             self._raytracer.reset()
 
     def build(self):
-        if self._context is not None:
-            self._context.build(self._scene)
+        self._context.build(self._scene)
 
         if self._viewer is not None:
             self._viewer.build(self._scene)
@@ -107,25 +102,21 @@ class Visualizer(RBC):
         else:
             self.viewer_lock = DummyViewerLock()
 
-        if self._rasterizer is not None:
-            self._rasterizer.build()
+        self._rasterizer.build()
         if self._raytracer is not None:
             self._raytracer.build(self._scene)
 
         for camera in self._cameras:
             camera._build()
 
-        if (
-            len(self._cameras) > 0 and gs.platform == "Linux"
-        ):  # Non-linux system uses main thread for viewer, which hasn't been started yet here.
-            # need to update viewer once here, because otherwise camera will update scene if render is called right after build, which will lead to segfault.
+        if self._cameras:
+            # need to update viewer once here, because otherwise camera will update scene if render is called right
+            # after build, which will lead to segfault.
             if self._viewer is not None:
                 self._viewer.update()
             else:
-                # viewer creation will compile rendering kernels
-                # if viewer is not created, render here once to compile
-                if self._rasterizer is not None:
-                    self._rasterizer.render_camera(self._cameras[0])
+                # viewer creation will compile rendering kernels if viewer is not created, render here once to compile
+                self._rasterizer.render_camera(self._cameras[0])
 
     def update(self, force=True):
         if force:  # force update

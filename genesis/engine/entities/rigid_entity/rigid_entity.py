@@ -355,16 +355,17 @@ class RigidEntity(Entity):
         l_infos = []
         j_infos = []
 
-        q_offset, dof_offset = 0, 0
+        q_offset, dof_offset, qpos0_offset = 0, 0, 0
 
         for i_l in range(n_links):
-            l_info, j_info = mju.parse_link(mj, i_l + 1, q_offset, dof_offset, morph.scale)
+            l_info, j_info = mju.parse_link(mj, i_l + 1, q_offset, dof_offset, qpos0_offset, morph.scale)
 
             l_infos.append(l_info)
             j_infos.append(j_info)
 
             q_offset += j_info["n_qs"]
             dof_offset += j_info["n_dofs"]
+            qpos0_offset += j_info["n_qpos0"]
 
         l_infos, j_infos, links_g_info, ordered_links_idx = uu._order_links(l_infos, j_infos, links_g_info)
         for i_l in range(len(l_infos)):
@@ -386,7 +387,7 @@ class RigidEntity(Entity):
             self._add_by_info(l_info, j_info, links_g_info[i_l], morph, surface)
 
         if world_g_info:
-            l_world_info, j_world_info = mju.parse_link(mj, 0, q_offset, dof_offset, morph.scale)
+            l_world_info, j_world_info = mju.parse_link(mj, 0, q_offset, dof_offset, qpos0_offset, morph.scale)
             if morph.pos is not None:
                 l_world_info["pos"] = np.array(morph.pos)
                 gs.logger.warning("Overriding base link's pos with user provided value in morph.")
@@ -1327,6 +1328,89 @@ class RigidEntity(Entity):
             for i_q in range(self.n_qs):
                 self._solver.qpos[i_q + self._q_start, i_b] = self._IK_qpos_orig[i_q, i_b]
             self._solver._func_forward_kinematics_entity(self._idx_in_solver, i_b)
+
+    @gs.assert_built
+    def forward_kinematics(self, qpos, qs_idx_local=None, ls_idx_local=None, envs_idx=None):
+        """
+        Compute forward kinematics for a single target link.
+
+        Parameters
+        ----------
+        qpos : array_like, shape (n_qs,) or (n_envs, n_qs) or (len(envs_idx), n_qs)
+            The joint positions.
+        qs_idx_local : None | array_like, optional
+            The indices of the qpos to set. If None, all qpos will be set. Defaults to None.
+        ls_idx_local : None | array_like, optional
+            The indices of the links to get. If None, all links will be returned. Defaults to None.
+        envs_idx : None | array_like, optional
+            The indices of the environments to set. If None, all environments will be set. Defaults to None.
+
+        Returns
+        -------
+        links_pos : array_like, shape (n_links, 3) or (n_envs, n_links, 3) or (len(envs_idx), n_links, 3)
+            The positions of the links (link frame origins).
+        links_quat : array_like, shape (n_links, 4) or (n_envs, n_links, 4) or (len(envs_idx), n_links, 4)
+            The orientations of the links.
+        """
+
+        if self._solver.n_envs == 0:
+            qpos = qpos.unsqueeze(0)
+            envs_idx = torch.zeros(1, dtype=gs.tc_int)
+        else:
+            envs_idx = self._solver._get_envs_idx(envs_idx)
+
+        links_idx = self._get_ls_idx(ls_idx_local)
+        links_pos = torch.empty((len(envs_idx), len(links_idx), 3), dtype=gs.tc_float, device=gs.device)
+        links_quat = torch.empty((len(envs_idx), len(links_idx), 4), dtype=gs.tc_float, device=gs.device)
+
+        self._kernel_forward_kinematics(
+            links_pos,
+            links_quat,
+            qpos,
+            self._get_qs_idx(qs_idx_local),
+            links_idx,
+            envs_idx,
+        )
+
+        if self._solver.n_envs == 0:
+            links_pos = links_pos.squeeze(0)
+            links_quat = links_quat.squeeze(0)
+        return links_pos, links_quat
+
+    @ti.kernel
+    def _kernel_forward_kinematics(
+        self,
+        links_pos: ti.types.ndarray(),
+        links_quat: ti.types.ndarray(),
+        qpos: ti.types.ndarray(),
+        qs_idx: ti.types.ndarray(),
+        links_idx: ti.types.ndarray(),
+        envs_idx: ti.types.ndarray(),
+    ):
+
+        ti.loop_config(serialize=self._solver._para_level < gs.PARA_LEVEL.ALL)
+        for i_q_, i_b_ in ti.ndrange(qs_idx.shape[0], envs_idx.shape[0]):
+            # save original qpos
+            # NOTE: reusing the IK_qpos_orig as cache (should not be a problem)
+            self._IK_qpos_orig[qs_idx[i_q_], envs_idx[i_b_]] = self._solver.qpos[qs_idx[i_q_], envs_idx[i_b_]]
+            # set new qpos
+            self._solver.qpos[qs_idx[i_q_], envs_idx[i_b_]] = qpos[i_b_, i_q_]
+            # run FK
+            self._solver._func_forward_kinematics_entity(self._idx_in_solver, envs_idx[i_b_])
+
+        ti.loop_config(serialize=self._solver._para_level < gs.PARA_LEVEL.PARTIAL)
+        for i_l_, i_b_ in ti.ndrange(links_idx.shape[0], envs_idx.shape[0]):
+            for i in ti.static(range(3)):
+                links_pos[i_b_, i_l_, i] = self._solver.links_state[links_idx[i_l_], envs_idx[i_b_]].pos[i]
+            for i in ti.static(range(4)):
+                links_quat[i_b_, i_l_, i] = self._solver.links_state[links_idx[i_l_], envs_idx[i_b_]].quat[i]
+
+        ti.loop_config(serialize=self._solver._para_level < gs.PARA_LEVEL.ALL)
+        for i_q_, i_b_ in ti.ndrange(qs_idx.shape[0], envs_idx.shape[0]):
+            # restore original qpos
+            self._solver.qpos[qs_idx[i_q_], envs_idx[i_b_]] = self._IK_qpos_orig[qs_idx[i_q_], envs_idx[i_b_]]
+            # run FK
+            self._solver._func_forward_kinematics_entity(self._idx_in_solver, envs_idx[i_b_])
 
     # ------------------------------------------------------------------------------------
     # --------------------------------- motion planing -----------------------------------

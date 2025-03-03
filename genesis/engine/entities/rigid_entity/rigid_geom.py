@@ -100,7 +100,6 @@ class RigidGeom(RBC):
 
     def _preprocess(self):
         # compute file name via hashing for caching
-
         self._gsd_path = mu.get_gsd_path(
             self._init_verts,
             self._init_faces,
@@ -109,7 +108,18 @@ class RigidGeom(RBC):
             self._material.sdf_max_res,
         )
 
-        if not os.path.exists(self._gsd_path):
+        # loading pre-computed cache if available
+        is_cached_loaded = False
+        if os.path.exists(self._gsd_path):
+            gs.logger.debug(f"Preprocessed file (`.gsd`) found in cache for geom idx {self._idx}.")
+            try:
+                with open(self._gsd_path, "rb") as file:
+                    gsd_dict = pkl.load(file)
+                is_cached_loaded = True
+            except (EOFError, pkl.UnpicklingError):
+                gs.logger.info("Ignoring corrupted cache.")
+
+        if not is_cached_loaded:
             with gs.logger.timer(f"Preprocessing geom idx ~~<{self._idx}>~~."):
                 ######## sdf ########
                 lower = self._init_verts.min(axis=0)
@@ -186,7 +196,7 @@ class RigidGeom(RBC):
                 vert_n_neighbors = np.array(vert_n_neighbors)
                 vert_neighbor_start = np.array(vert_neighbor_start)
 
-                # compile
+                # caching
                 gsd_dict = {
                     "sdf_res": sdf_res,
                     "sdf_val": sdf_val,
@@ -203,11 +213,6 @@ class RigidGeom(RBC):
                 os.makedirs(os.path.dirname(self._gsd_path), exist_ok=True)
                 with open(self._gsd_path, "wb") as file:
                     pkl.dump(gsd_dict, file)
-        else:
-            gs.logger.debug(f"Preprocessed `.gsd` file found in cache for geom idx {self._idx}.")
-
-            with open(self._gsd_path, "rb") as file:
-                gsd_dict = pkl.load(file)
 
         self._sdf_res = gsd_dict["sdf_res"]
         self._sdf_val = gsd_dict["sdf_val"]
@@ -223,11 +228,17 @@ class RigidGeom(RBC):
         self.vert_neighbor_start = gsd_dict["vert_neighbor_start"]
 
     def _compute_sd(self, query_points):
-        sd, _, _ = igl.signed_distance(query_points, self._sdf_verts, self._sdf_faces)
+        try:
+            sd, _, _ = igl.signed_distance(query_points, self._sdf_verts, self._sdf_faces)
+        except:
+            sd, _, _, _ = igl.signed_distance(query_points, self._sdf_verts, self._sdf_faces)
         return sd
 
     def _compute_closest_verts(self, query_points):
-        _, closest_faces, _ = igl.signed_distance(query_points, self._init_verts, self._init_faces)
+        try:
+            _, closest_faces, _ = igl.signed_distance(query_points, self._init_verts, self._init_faces)
+        except:
+            _, closest_faces, _, _ = igl.signed_distance(query_points, self._init_verts, self._init_faces)
         verts_ids = self._init_faces[closest_faces]
         verts_ids = verts_ids[
             np.arange(len(query_points)).astype(int),

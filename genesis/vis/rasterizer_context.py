@@ -5,11 +5,8 @@ import genesis.utils.geom as gu
 import genesis.utils.mesh as mu
 import genesis.utils.particle as pu
 
-try:
-    from genesis.ext import pyrender, trimesh
-    from genesis.ext.pyrender.jit_render import JITRenderer
-except Exception as e:
-    print(f"[Error]: {e}\n")
+from genesis.ext import pyrender, trimesh
+from genesis.ext.pyrender.jit_render import JITRenderer
 from genesis.utils.misc import tensor_to_array
 
 
@@ -72,12 +69,7 @@ class RasterizerContext:
             n_envs=self.n_rendered_envs,
         )
 
-        if gs.platform != "Windows":
-            self.jit = JITRenderer(self._scene, [], [])
-        else:
-            from genesis.ext.pyrender.non_jit_renderer import SimpleNonJITRenderer
-
-            self.jit = SimpleNonJITRenderer(self._scene, [], [])
+        self.jit = JITRenderer(self._scene, [], [])
 
         # nodes
         self.world_frame_node = None
@@ -848,11 +840,8 @@ class RasterizerContext:
 
     def seg_idxc_rgb_arr_to_idxc_arr(self, seg_idxc_rgb_arr):
         # Combine the RGB components into a single integer
-        seg_idxc_arr = np.array(
-            seg_idxc_rgb_arr[..., 0] * 256 * 256 + seg_idxc_rgb_arr[..., 1] * 256 + seg_idxc_rgb_arr[..., 2],
-            dtype=int,
-        )
-        return seg_idxc_arr
+        seg_idxc_rgb_arr = seg_idxc_rgb_arr.astype(np.int64, copy=False)
+        return seg_idxc_rgb_arr[..., 0] * (256 * 256) + seg_idxc_rgb_arr[..., 1] * 256 + seg_idxc_rgb_arr[..., 2]
 
     def colorize_seg_idxc_arr(self, seg_idxc_arr):
         return self.seg_idxc_to_color[seg_idxc_arr]
