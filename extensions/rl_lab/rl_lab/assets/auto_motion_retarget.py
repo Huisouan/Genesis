@@ -80,8 +80,9 @@ class AutoMotionRetarget:
         self.scene.reset()
         self.motion_link_idxs = []
         for link in self.robot._links:
-            if link.name not in ['FL_foot', 'FR_foot', 'RL_foot', 'RR_foot', 
-                                 'FL_calf_rotor', 'FR_calf_rotor', 'RL_calf_rotor', 'RR_calf_rotor'
+            if link.name not in [
+                #'FL_foot', 'FR_foot', 'RL_foot', 'RR_foot', 
+                'FL_calf_rotor', 'FR_calf_rotor', 'RL_calf_rotor', 'RR_calf_rotor'
                                  ]:
                 self.motion_link_idxs.append(link.idx_local)  
         self.dof_names = [
@@ -130,7 +131,6 @@ class AutoMotionRetarget:
                         surface=gs.surfaces.Default(color=color),
                     )
                     self.point_list.append({'name': point_name, 'point': point})
-
 
 
     def batch_process(self):
@@ -580,7 +580,7 @@ class AutoMotionRetarget:
         global_translation = global_translation[self.motion_link_idxs]
         global_rotation = global_rotation[self.motion_link_idxs]
         local_rotation = local_rotation[self.motion_link_idxs]
-        curr = {}
+        curr = {} 
         curr['global_translation'] = global_translation
         curr['global_rotation'] = global_rotation
         curr['local_rotation'] = local_rotation

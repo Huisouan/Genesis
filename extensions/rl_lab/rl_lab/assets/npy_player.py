@@ -18,6 +18,19 @@ class NPYPlayer:
         self.data_list = []
         self.scene = None
         self.robot = None
+        # 按文件名排序存储完整路径
+        self.npy_files = sorted(npy_files, key=lambda x: os.path.basename(x))
+        # 存储文件名列表用于显示
+        self.file_names = [os.path.basename(f) for f in self.npy_files]        
+        
+        # 确保data_list按排序后的顺序加载
+        self.data_list = []
+        for file_path in self.npy_files:  # 遍历已排序的路径
+            data = EasyDict(torch.load(file_path))
+            self.data_list.append(data)
+        # 删除原有的load_all_npy_data调用        
+        
+        
         
         # 播放控制参数
         self.frame_in_play = 0
@@ -36,21 +49,42 @@ class NPYPlayer:
         self.initialize_scene()
 
     def load_all_npy_data(self):
-        """加载所有npy文件的数据"""
+        """加载所有npy文件的数据，如果输出文件夹有同名文件则跳过"""
         for file_path in self.npy_files:
-            data = EasyDict(torch.load(file_path))
-            self.data_list.append(data)
+            # 获取文件名和基础名称
+            file_name = os.path.basename(file_path)
+            base_name = os.path.splitext(file_name)[0]
+            
+            # 检查目标文件夹中的clipped目录
+            clipped_folder = os.path.join(os.path.dirname(file_path), "clipped")
+            if os.path.exists(clipped_folder):
+                # 检查是否存在同名文件或带_clip后缀的文件
+                clipped_files = glob.glob(os.path.join(clipped_folder, f"{base_name}_clip*.npy"))
+                if clipped_files:
+                    print(f"跳过已处理文件: {file_name}")
+                    continue  # 如果存在同名文件，跳过加载
+            
+            # 加载数据
+            try:
+                data = EasyDict(torch.load(file_path))
+                self.data_list.append(data)
+                print(f"成功加载文件: {file_name}")
+            except Exception as e:
+                print(f"加载文件失败: {file_name}, 错误: {e}")
 
     def switch_file(self, index):
         """切换到指定的npy文件"""
         if 0 <= index < len(self.npy_files):
+            # 确保索引有效性
             self.current_file_index = index
             self.data = self.data_list[index]
+            self.end_frame = self.data['dof_pos'].shape[0]  # 必须立即更新关键值
+            
+            # 强制重置播放状态
             self.frame_in_play = 0
             self.start_frame = 0
-            self.end_frame = self.data['dof_pos'].shape[0]
             self.record_stack['motion_data'] = []
-            self.record = False
+            
 
     def initialize_scene(self):
         """初始化3D场景并加载机器人模型"""
@@ -102,7 +136,7 @@ class NPYPlayer:
             self.play_frame(self.frame_in_play)
             self.scene.step()
             if self.play:
-                self.frame_in_play += 1
+                self.frame_in_play += 2
 
     def get_total_frames(self):
         """获取当前文件的总帧数"""
@@ -113,11 +147,35 @@ class TkinterUI:
         self.master = master
         self.player = player
         
-        # 文件选择组件
+        # 创建带滚动条的框架容器
+        file_frame = ttk.Frame(master)
+        file_frame.pack(fill='x', padx=5, pady=5)
+
+        # 按文件名排序（不包含路径）
+        sorted_files = sorted(player.npy_files, key=lambda x: os.path.basename(x))
+        
+        # 使用Combobox代替OptionMenu
         self.file_var = tk.StringVar()
-        self.file_var.set(self.player.npy_files[0])  # 默认选择第一个文件
-        self.file_menu = ttk.OptionMenu(master, self.file_var, *self.player.npy_files, command=self.select_file)
-        self.file_menu.pack()
+        # 使用已排序的文件名列表
+        self.file_combobox = ttk.Combobox(
+            file_frame,
+            textvariable=self.file_var,
+            values=player.file_names,  # 直接使用预先生成的文件名列表
+            state="readonly"
+        )
+        # 其他初始化代码保持不变...
+
+        self.file_combobox.pack(side='left', fill='x', expand=True)
+
+        # 添加滚动条
+        scrollbar = ttk.Scrollbar(file_frame, orient='horizontal', command=self.file_combobox.xview)
+        scrollbar.pack(side='right', fill='x')
+        self.file_combobox.configure(xscrollcommand=scrollbar.set)
+
+        # 设置默认选择并绑定事件
+        self.file_combobox.current(0)
+        self.file_combobox.bind("<<ComboboxSelected>>", self.select_file_combobox)
+
 
         # 显示当前文件的总帧数
         self.total_frames_label = ttk.Label(master, text=f"总帧数: {self.player.get_total_frames()}")
@@ -151,14 +209,20 @@ class TkinterUI:
         
         self.update_progress()
 
-    def select_file(self, value):
-        """选择要播放的文件"""
-        index = self.player.npy_files.index(value)
-        self.player.switch_file(index)
-        self.total_frames_label.config(text=f"总帧数: {self.player.get_total_frames()}")  # 更新总帧数标签
-        self.end_frame_entry.delete(0, tk.END)
-        self.end_frame_entry.insert(0, str(self.player.get_total_frames()))  # 更新结束帧的默认值为总帧数
+    def select_file_combobox(self, event):
+        selected_index = self.file_combobox.current()
+        self.player.switch_file(selected_index)
+        
+        # 使用after方法确保在主线程执行UI更新
+        self.master.after(0, self._update_ui_after_switch)
 
+        
+    def _update_ui_after_switch(self):
+        self.total_frames_label.config(text=f"总帧数: {self.player.get_total_frames()}")
+        self.end_frame_entry.delete(0, tk.END)
+        self.end_frame_entry.insert(0, str(self.player.get_total_frames()))
+        self.progress_var.set(0)
+        self.frame_label.config(text="Frame: 0")
     def toggle_play(self):
         self.player.play = not self.player.play
         self.play_button.config(text="暂停" if self.player.play else "播放")
@@ -224,7 +288,8 @@ class TkinterUI:
         curr = self.player.frame_in_play - self.player.start_frame
         self.progress_var.set(int(curr/total*100))
         self.frame_label.config(text=f"Frame: {self.player.frame_in_play}")
-        self.master.after(100, self.update_progress)
+        self.master.update_idletasks()  # 强制立即更新UI
+        self.master.after(200, self.update_progress)
 
 if __name__ == "__main__":
     urdf_file = "datasets/go2_description/urdf/go2_description.urdf"
